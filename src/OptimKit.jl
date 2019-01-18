@@ -12,8 +12,9 @@ _add!(vdst, vsrc, α) = LinearAlgebra.axpy!(α, vsrc, vdst)
 include("linesearches.jl")
 include("gd.jl")
 include("cg.jl")
+include("lbfgs.jl")
 
-export gd, cg
+export gd, cg, lbfgs
 export FletcherReeves, HestenesStiefel, PolakRibierePolyak, HagherZhang, DaiYuan
 export HagerZhangLineSearch
 

@@ -9,8 +9,7 @@ function gd(fg, x; linesearch = HagerZhangLineSearch(),
     α = 1e-2
     numiter = 0
     verbosity >= 2 &&
-        @info @sprintf("GD: iter %4d: f = %.12f, ‖∇f‖ = %.4e, step size = %.2e",
-                        numiter, f, normgrad, α)
+        @info @sprintf("GD: initializing with f = %.12f, ‖∇f‖ = %.4e", f, normgrad)
     while numiter < maxiter
         numiter += 1
         x, f, g, α, = linesearch(fg, x, d, (f, g);

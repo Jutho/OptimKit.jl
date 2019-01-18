@@ -15,8 +15,7 @@ function cg(fg, x; linesearch = HagerZhangLineSearch(),
 
     numiter = 0
     verbosity >= 2 &&
-        @info @sprintf("CG: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, β = %.2e",
-                        numiter, f, normgrad, α, zero(α))
+        @info @sprintf("CG: initializing with f = %.12f, ‖∇f‖ = %.4e", f, normgrad)
     while numiter < maxiter
         numiter += 1
         xprev = x
@@ -31,8 +30,8 @@ function cg(fg, x; linesearch = HagerZhangLineSearch(),
             break
         end
         # next search direction
-        dprev = transport(dprev, xprev, dprev, α)
         gprev = transport(gprev, xprev, dprev, α)
+        dprev = transport(dprev, xprev, dprev, α)
         y = add!(deepcopy(g), gprev, -1)
         β = let x = x
             flavor(g, gprev, y, dprev, (d1,d2)->inner(x,d1,d2))

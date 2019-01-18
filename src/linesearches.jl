@@ -47,20 +47,20 @@ function takestep(iter, α)
 end
 
 secant(a, b, fa, fb) = (a*fb-b*fa)/(fb-fa)
-function secant2(iter::HagerZhangLineSearchIterator, a::LineSearchPoint, b::LineSearchPoint)
-    # interval has (a.dϕ < 0, a.ϕ <= f₀+ϵ), (b.dϕ >= 0)
-    αc = secant(a.α, b.α, a.dϕ, b.dϕ)
-    A, B = update(iter, a, b, αc)
-    if αc == B.α
-        αc = secant(b.α, B.α, b.dϕ, B.dϕ)
-        return update(iter, A, B, αc)
-    elseif αc == A.α
-        αc = secant(a.α, A.α, a.dϕ, A.dϕ)
-        return update(iter, A, B, αc)
-    else
-        return A, B
-    end
-end
+# function secant2(iter::HagerZhangLineSearchIterator, a::LineSearchPoint, b::LineSearchPoint)
+#     # interval has (a.dϕ < 0, a.ϕ <= f₀+ϵ), (b.dϕ >= 0)
+#     αc = secant(a.α, b.α, a.dϕ, b.dϕ)
+#     A, B = update(iter, a, b, αc)
+#     if αc == B.α
+#         αc = secant(b.α, B.α, b.dϕ, B.dϕ)
+#         return update(iter, A, B, αc)
+#     elseif αc == A.α
+#         αc = secant(a.α, A.α, a.dϕ, A.dϕ)
+#         return update(iter, A, B, αc)
+#     else
+#         return A, B
+#     end
+# end
 
 function update(iter::HagerZhangLineSearchIterator, a::LineSearchPoint, b::LineSearchPoint, αc)
     # interval has (a.dϕ < 0, a.ϕ <= f₀+ϵ), (b.dϕ >= 0)
@@ -115,14 +115,9 @@ end
 
 
 function Base.iterate(iter::HagerZhangLineSearchIterator)
+    x₀ = iter.x₀
     a, b = bracket(iter, iter.α₀)
-    # if checkexactwolfe(iter, a) || checkapproxwolfe(iter, a)
-    #     return (a.x, a.f, a.∇f, a.α, a.dϕ), (a, b, true)
-    # elseif checkexactwolfe(iter, b) || checkapproxwolfe(iter, b)
-    #     return (b.x, b.f, b.∇f, b.α, b.dϕ), (a, b, true)
-    # else
-        return (a.x, a.f, a.∇f, a.α, a.dϕ), (a, b, false)
-    # end
+    return (a.x, a.f, a.∇f, a.α, a.dϕ), (a, b, false)
 end
 
 function Base.iterate(iter::HagerZhangLineSearchIterator, state::Tuple{LineSearchPoint,LineSearchPoint,Bool})
@@ -136,7 +131,25 @@ function Base.iterate(iter::HagerZhangLineSearchIterator, state::Tuple{LineSearc
         return nothing
     end
     dα = b.α - a.α
-    a, b = secant2(iter, a, b)
+    # secant2 step
+    αc = secant(a.α, b.α, a.dϕ, b.dϕ)
+    A, B = update(iter, a, b, αc)
+    if αc == B.α
+        if checkexactwolfe(B, x₀, δ, σ) || checkapproxwolfe(B, x₀, δ, σ, ϵ)
+            return (B.x, B.f, B.∇f, B.α, B.dϕ), (a, b, true)
+        end
+        αc = secant(b.α, B.α, b.dϕ, B.dϕ)
+        a, b = update(iter, A, B, αc)
+    elseif αc == A.α
+        if checkexactwolfe(A, x₀, δ, σ) || checkapproxwolfe(A, x₀, δ, σ, ϵ)
+            return (A.x, A.f, A.∇f, A.α, A.dϕ), (a, b, true)
+        end
+        αc = secant(a.α, A.α, a.dϕ, A.dϕ)
+        a, b = update(iter, A, B, αc)
+    else
+        a, b = A, B
+    end
+    # end secant2
     if b.α - a.α > iter.parameters.γ * dα
         a, b = update(iter, a, b, (a.α + b.α)/2)
     end
@@ -171,7 +184,6 @@ function (ls::HagerZhangLineSearch)(fg, x₀, d₀, (f0, g0) = fg(x₀);
         a, b, done = state
         verbosity >= 2 &&
             @info @sprintf("Linesearch %2d: [a,b] = [%.2e, %.2e], a.dϕ = %.2e, b.dϕ = %.2e, a.ϕ - ϕ₀ = %.2e, b.ϕ - ϕ₀ = %.2e", k, a.α, b.α, a.dϕ, b.dϕ, a.ϕ - f0, b.ϕ - f0)
-            
         next = iterate(iter, state)
         k += 1
         if next === nothing || k == maxiter
