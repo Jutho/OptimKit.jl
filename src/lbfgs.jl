@@ -1,4 +1,3 @@
-using LinearAlgebra
 function lbfgs(fg, x; linesearch = HagerZhangLineSearch(),
                     retract = _retract, inner = _inner, transport = _transport,
                     scale! = _scale!, add! = _add!,

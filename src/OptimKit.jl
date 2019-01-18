@@ -15,7 +15,7 @@ include("cg.jl")
 include("lbfgs.jl")
 
 export gd, cg, lbfgs
-export FletcherReeves, HestenesStiefel, PolakRibierePolyak, HagherZhang, DaiYuan
+export FletcherReeves, HestenesStiefel, PolakRibierePolyak, HagerZhang, DaiYuan
 export HagerZhangLineSearch
 
 end # module
