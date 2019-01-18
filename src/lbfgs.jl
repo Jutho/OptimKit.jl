@@ -76,8 +76,8 @@ function lbfgs(fg, x; linesearch = HagerZhangLineSearch(),
         end
 
         verbosity >= 2 &&
-            @info @sprintf("LBFGS: iter %4d: f = %.12f, ‖∇f‖ = %.4e and %.4e, α = %.2e",
-                            numiter, f, normgrad, norm(g,Inf), α)
+            @info @sprintf("LBFGS: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e",
+                            numiter, f, normgrad, α)
     end
     if verbosity > 0
         if normgrad <= gradtol
