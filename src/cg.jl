@@ -3,7 +3,7 @@ end
 
 function cg(fg, x; linesearch = HagerZhangLineSearch(),
                     flavor::CGFlavor = HagerZhang(),
-                    retract = _retract, inner = _inner, transport = _transport,
+                    retract = _retract, inner = _inner, transport! = _transport!,
                     scale! = _scale!, add! = _add!,
                     maxiter = typemax(Int), gradtol = 1e-8, verbosity::Int = 0)
 
@@ -30,8 +30,8 @@ function cg(fg, x; linesearch = HagerZhangLineSearch(),
             break
         end
         # next search direction
-        gprev = transport(gprev, xprev, dprev, α)
-        dprev = transport(dprev, xprev, dprev, α)
+        gprev = transport!(gprev, xprev, dprev, α)
+        dprev = transport!(dprev, xprev, dprev, α)
         y = add!(deepcopy(g), gprev, -1)
         β = let x = x
             flavor(g, gprev, y, dprev, (d1,d2)->inner(x,d1,d2))
