@@ -23,9 +23,10 @@ _add!(vdst, vsrc, β) = LinearAlgebra.axpy!(β, vsrc, vdst)
 _scale!(v, β) = LinearAlgebra.rmul!(v, β)
 ```
 
+The three functions `gd`, `cg` and `lbfgs` are called as `...(fg, x₀; kwargs...)` with `x₀` an initial guess. Keyword arguments include the above function arguments (`retract`, `inner`, `add!`, `scale!`, `transport!`) as well as `maxiter` (maximum number of iterations), `tol` (requested tolerance on the norm of the gradient, i.e. convergence is obtained if `inner(x, g, g) < tol*tol` for `_, g = fg(x)`, and `verbosity`, an integer which controls the amount of information being printed.
+
 Finally, `lbfgs` also takes a `Bool` keyword argument `isometrictransport`, which indices whether the transport of vectors preserves their inner product, i.e. whether
 ```julia
 inner(x, g1, g2) == inner(retract(x, d, α), transport!(g1, x, d, α), transport!(g2, x, d, α))
 ```
-
-The three functions `gd`, `cg` and `lbfgs` are called as `...(fg, x₀; kwargs...)` with `x₀` an initial guess. Keyword arguments include the above function arguments (`retract`, `inner`, `add!`, `scale!`, `transport!`) as well as `maxiter` (maximum number of iterations), `tol` (requested tolerance on the norm of the gradient, i.e. convergence is obtained if `inner(x, g, g) < tol*tol` for `_, g = fg(x)`, and `verbosity`, an integer which controls the amount of information being printed.
+The default value is false, unless the default transport (`_transport!`) and inner product (`_inner`) are used.
