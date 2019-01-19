@@ -10,7 +10,7 @@ So far, the optimization problem is specified as a function `fval, gval = fg(x)`
 
 *    `s = inner(x, g1, g2)`: compute the inner product between two gradients or similar objects at position `x`. The `x` dependence is useful for optimization on manifolds, where this function represents the metric; in particular it should be symmetric `inner(x, g1, g2) == inner(x, g2, g1)` and real-valued.
 *    `retract(x, g, α)`: take a step in direction `g` (same type as gradients) starting from point `x` and with step length `α`, returns the new `x(α)` and the local direction at that position, i.e. `dx(α)/dα`.
-*    'gdst = add!(gdst, gsrc, β)`: compute the equivalent of `gdst + gsrc*β`, possibly overwriting `gdst` in place, but we always use the return value
+*    `gdst = add!(gdst, gsrc, β)`: compute the equivalent of `gdst + gsrc*β`, possibly overwriting `gdst` in place, but we always use the return value
 *    `g = scale!(g, β)`: compute the equivalent of `g*β`, possibly in place, but we always use the return value. This is mostly used as `scale!(g, -1)` to compute the negative gradient as part of the step direction.
 *    `g = transport!(g, x, d, α)`: transport gradient `g` along the retraction of `x` in the direction `d` (same type as a gradient) with step length `α`, can be in place but the return value is used.
 
