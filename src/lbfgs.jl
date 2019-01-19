@@ -1,7 +1,7 @@
 function lbfgs(fg, x; linesearch = HagerZhangLineSearch(),
-                    retract = _retract, inner = _inner, transport = _transport,
+                    retract = _retract, inner = _inner, transport! = _transport!,
                     scale! = _scale!, add! = _add!,
-                    isometrictransport = (transport == _transport && inner == _inner),
+                    isometrictransport = (transport! == _transport! && inner == _inner),
                     m = 10, maxiter = typemax(Int), gradtol = 1e-8, verbosity::Int = 0)
 
     f, g = fg(x)
@@ -25,8 +25,8 @@ function lbfgs(fg, x; linesearch = HagerZhangLineSearch(),
     push!(normgradhistory, normgrad)
 
     # set up InverseHessian approximation
-    gprev = transport(gprev, xprev, dprev, α)
-    dprev = transport(dprev, xprev, dprev, α)
+    gprev = transport!(gprev, xprev, dprev, α)
+    dprev = transport!(dprev, xprev, dprev, α)
     y = scale!(add!(gprev, g, -1), -1)
     s = scale!(dprev, α)
     ρ = 1/inner(x, s, y)
@@ -55,16 +55,16 @@ function lbfgs(fg, x; linesearch = HagerZhangLineSearch(),
         # next search direction
         for k = 1:length(H)
             @inbounds s, y, ρ = H[k]
-            s = transport(s, xprev, dprev, α)
-            y = transport(y, xprev, dprev, α)
+            s = transport!(s, xprev, dprev, α)
+            y = transport!(y, xprev, dprev, α)
             if !isometrictransport
                 ρ = 1/inner(x, s, y)
                 @assert ρ > 0
             end
             @inbounds H[k] = (s, y, ρ)
         end
-        gprev = transport(gprev, xprev, dprev, α)
-        dprev = transport(dprev, xprev, dprev, α)
+        gprev = transport!(gprev, xprev, dprev, α)
+        dprev = transport!(dprev, xprev, dprev, α)
         y = scale!(add!(gprev, g, -1), -1)
         s = scale!(dprev, α)
         ρ = 1/inner(x, y, s)
