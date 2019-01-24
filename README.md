@@ -8,7 +8,9 @@ A package for gradient optimization that tries to know or assume as little as po
 *   `GradientDescent(; params...)`
 *   `ConjugateGradient(; flavor = ..., params...)`
 *   `LBFGS(m::Int; params...)`
+
 All of them take a number of parameters, namely
+
 *   `maxiter`: number of iterations (defaults to `typemax(Int)`, so essentially unbounded)
 *   `gradtol`: convergence criterion, stop when the 2-norm of the gradient is smaller than `gradtol` (default value = `gradtol = 1e-8`)
 *   `linesearch`: which linesearch algorithm to be used, currently there is only one choice, namely `HagerZhangLineSearch(;...)` (see below).
