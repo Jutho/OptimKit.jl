@@ -3,12 +3,13 @@
 abstract type AbstractLineSearch end
 
 struct LineSearchPoint{T<:Real,X,G}
-    α::T
-    ϕ::T
-    dϕ::T
+    α::T # step length
+    ϕ::T # local function value
+    dϕ::T # local directional derivative of cost function: dϕ/dα
     x::X
     f::T # equal to ϕ
     ∇f::G
+    dx::G # local tangent at linesearch path: dϕ = inner(x, dx, ∇f)
 end
 
 function checkapproxwolfe(x::LineSearchPoint, x₀::LineSearchPoint, δ, σ, ϵ)
@@ -19,12 +20,14 @@ function checkexactwolfe(x::LineSearchPoint, x₀::LineSearchPoint, δ, σ)
 end
 
 struct HagerZhangLineSearch{T<:Real} <: AbstractLineSearch
-    δ::T # parameter for approximate first wolfe condition
+    δ::T # parameter for (approximate) first wolfe condition
     σ::T # parameter for second wolf condition
     ϵ::T # parameter for approximate Wolfe termination
     θ::T # used in update rules for bracketing interval
     γ::T # determines when a bisection step is performed
     ρ::T # used in determining initial bracketing interval
+    maxiter::Int
+    verbosity::Int
 end
 
 
@@ -43,7 +46,7 @@ function takestep(iter, α)
     f, ∇f = iter.fdf(x)
     ϕ = f
     dϕ = iter.inner(x, ∇f, d)
-    return LineSearchPoint(α, ϕ, dϕ, x, f, ∇f)
+    return LineSearchPoint(α, ϕ, dϕ, x, f, ∇f, d)
 end
 
 secant(a, b, fa, fb) = (a*fb-b*fa)/(fb-fa)
@@ -64,9 +67,12 @@ secant(a, b, fa, fb) = (a*fb-b*fa)/(fb-fa)
 
 function update(iter::HagerZhangLineSearchIterator, a::LineSearchPoint, b::LineSearchPoint, αc)
     # interval has (a.dϕ < 0, a.ϕ <= f₀+ϵ), (b.dϕ >= 0)
+    ϕ₀ = iter.x₀.f
+    fmax = ϕ₀ + iter.parameters.ϵ
     !(a.α < αc < b.α) && return a, b # U0
-    fmax = iter.x₀.f + iter.parameters.ϵ
     c = takestep(iter, αc)
+    iter.parameters.verbosity > 2 &&
+        @info @sprintf("Linesearch update: try c = %.2e, dϕᶜ = %.2e, ϕᶜ - ϕ₀ = %.2e", c.α, c.dϕ, c.ϕ - ϕ₀)
     if c.dϕ > 0 # U1
         return a, c
     elseif c.dϕ < 0 && c.ϕ <= fmax # U2
@@ -81,12 +87,20 @@ function bisect(iter::HagerZhangLineSearchIterator, a::LineSearchPoint, b::LineS
     θ = iter.parameters.θ
     fmax = iter.x₀.f + iter.parameters.ϵ
     while true
+
         if b.α - a.α < eps()
-            @error "bisection failure: b.α - a.α = $(b.α - a.α), a.ϕ = $(a.ϕ), b.ϕ = $(b.ϕ)"
+            error(@sprintf("Linesearch bisection failure: [a, b] = [%.2e, %.2e], b-a = %.2e, dϕᵃ = %.2e, dϕᵇ = %.2e, (ϕᵇ - ϕᵃ)/(b-a) = %.2e", a.α, b.α, b.α - a.α, a.dϕ, b.dϕ, (b.ϕ - a.ϕ)/(b.α - a.α)))
         end
 
         αc = (1 - θ) * a.α + θ * b.α
         c = takestep(iter, αc)
+        if iter.parameters.verbosity > 2
+            @info @sprintf(
+            """Linesearch bisect: [a, b] = [%.2e, %.2e], b-a = %.2e, dϕᵃ = %.2e, dϕᵇ = %.2e, (ϕᵇ - ϕᵃ) = %.2e
+            ↪︎ c = %.2e, dϕᶜ = %.2e, ϕᶜ - ϕᵃ = %.2e""",
+            a.α, b.α, b.α-a.α, a.dϕ, b.dϕ, (b.ϕ - a.ϕ), c.α, c.dϕ, c.ϕ - a.ϕ)
+        end
+
         if c.dϕ >= 0 # U3.a
             return a, c
         elseif c.ϕ <= fmax # U3.b
@@ -100,8 +114,13 @@ end
 function bracket(iter::HagerZhangLineSearchIterator{T}, α = one(T)) where {T}
     a = iter.x₀
     fmax = a.f + iter.parameters.ϵ
+    iter.parameters.verbosity > 2 &&
+        @info @sprintf("Linesearch start: dϕ₀ = %.2e, ϕ₀ = %.2e", a.dϕ, a.ϕ)
     while true
         c = takestep(iter, α)
+        if iter.parameters.verbosity > 2
+            @info @sprintf("Linesearch bracket: try c = %.2e, dϕᶜ = %.2e, ϕᶜ - ϕ₀ = %.2e", c.α, c.dϕ, c.ϕ - a.ϕ)
+        end
         c.dϕ >= 0 && return a, c # B1
         # from here: b.dϕ < 0
         if c.ϕ > fmax # B2
@@ -117,7 +136,7 @@ end
 function Base.iterate(iter::HagerZhangLineSearchIterator)
     x₀ = iter.x₀
     a, b = bracket(iter, iter.α₀)
-    return (a.x, a.f, a.∇f, a.α, a.dϕ), (a, b, false)
+    return (a.x, a.f, a.∇f, a.dx, a.α, a.dϕ), (a, b, false)
 end
 
 function Base.iterate(iter::HagerZhangLineSearchIterator, state::Tuple{LineSearchPoint,LineSearchPoint,Bool})
@@ -136,13 +155,13 @@ function Base.iterate(iter::HagerZhangLineSearchIterator, state::Tuple{LineSearc
     A, B = update(iter, a, b, αc)
     if αc == B.α
         if checkexactwolfe(B, x₀, δ, σ) || checkapproxwolfe(B, x₀, δ, σ, ϵ)
-            return (B.x, B.f, B.∇f, B.α, B.dϕ), (a, b, true)
+            return (B.x, B.f, B.∇f, B.dx, B.α, B.dϕ), (a, b, true)
         end
         αc = secant(b.α, B.α, b.dϕ, B.dϕ)
         a, b = update(iter, A, B, αc)
     elseif αc == A.α
         if checkexactwolfe(A, x₀, δ, σ) || checkapproxwolfe(A, x₀, δ, σ, ϵ)
-            return (A.x, A.f, A.∇f, A.α, A.dϕ), (a, b, true)
+            return (A.x, A.f, A.∇f, A.dx, A.α, A.dϕ), (a, b, true)
         end
         αc = secant(a.α, A.α, a.dϕ, A.dϕ)
         a, b = update(iter, A, B, αc)
@@ -157,37 +176,44 @@ function Base.iterate(iter::HagerZhangLineSearchIterator, state::Tuple{LineSearc
     bwolfe = checkexactwolfe(b, x₀, δ, σ) || checkapproxwolfe(b, x₀, δ, σ, ϵ)
 
     if a.ϕ < b.ϕ && awolfe
-        return (a.x, a.f, a.∇f, a.α, a.dϕ), (a, b, true)
+        return (a.x, a.f, a.∇f, a.dx, a.α, a.dϕ), (a, b, true)
     elseif bwolfe
-        return (b.x, b.f, b.∇f, b.α, b.dϕ), (a, b, true)
+        return (b.x, b.f, b.∇f, b.dx, b.α, b.dϕ), (a, b, true)
     else
-        return (a.x, a.f, a.∇f, a.α, a.dϕ), (a, b, false)
+        return (a.x, a.f, a.∇f, a.dx, a.α, a.dϕ), (a, b, false)
     end
 end
 
 HagerZhangLineSearch(; δ::Real = .1, σ::Real = .9, ϵ::Real = 1e-6,
-                        θ::Real = 1/2, γ::Real = 2/3, ρ::Real = 5.) =
-    HagerZhangLineSearch(promote(δ, σ, ϵ, θ, γ, ρ)...)
+                        θ::Real = 1/2, γ::Real = 2/3, ρ::Real = 5.,
+                        maxiter = typemax(Int), verbosity::Int = 0) =
+    HagerZhangLineSearch(promote(δ, σ, ϵ, θ, γ, ρ)..., maxiter, verbosity)
 
 function (ls::HagerZhangLineSearch)(fg, x₀, d₀, (f0, g0) = fg(x₀);
-                    retract = _retract, inner = _inner,
-                    initialguess = 1., maxiter = typemax(Int),
-                    verbosity::Int = 0)
+                    retract = _retract, inner = _inner, initialguess = 1.)
 
-    p = LineSearchPoint(zero(f0), f0, inner(x₀, g0, d₀), x₀, f0, g0)
+    p = LineSearchPoint(zero(f0), f0, inner(x₀, g0, d₀), x₀, f0, g0, d₀)
     iter = HagerZhangLineSearchIterator(fg, retract, inner, p, d₀, initialguess, ls)
     next = iterate(iter)
     @assert next !== nothing
     k = 1
     while true
-        (x, f, g, α, dϕ), state = next
+        (x, f, g, dx, α, dϕ), state = next
         a, b, done = state
-        verbosity >= 2 &&
-            @info @sprintf("Linesearch %2d: [a,b] = [%.2e, %.2e], a.dϕ = %.2e, b.dϕ = %.2e, a.ϕ - ϕ₀ = %.2e, b.ϕ - ϕ₀ = %.2e", k, a.α, b.α, a.dϕ, b.dϕ, a.ϕ - f0, b.ϕ - f0)
-        next = iterate(iter, state)
-        k += 1
-        if next === nothing || k == maxiter
-            return x, f, g, α, dϕ
+        if done
+            ls.verbosity >= 1 &&
+                @info @sprintf("Linesearch converged after %2d iterations: α = %.2e, dϕ = %.2e, ϕ - ϕ₀ = %.2e", k, α, dϕ, f - f0)
+            return x, f, g, dx, α
+        elseif k == ls.maxiter
+            ls.verbosity >= 1 &&
+                @info @sprintf("Linesearch not converged after %2d iterations: α = %.2e, dϕ = %.2e, ϕ - ϕ₀ = %.2e", k, α, dϕ, f - f0)
+            return x, f, g, dx, α
+        else
+            ls.verbosity >= 2 &&
+                @info @sprintf("Linesearch step %d: [a,b] = [%.2e, %.2e], dϕᵃ = %.2e, dϕᵇ = %.2e, ϕᵃ - ϕ₀ = %.2e, ϕᵇ - ϕ₀ = %.2e", k, a.α, b.α, a.dϕ, b.dϕ, a.ϕ - f0, b.ϕ - f0)
+            next = iterate(iter, state)
+            @assert next !== nothing
+            k += 1
         end
     end
 end

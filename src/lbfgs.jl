@@ -1,9 +1,20 @@
-function lbfgs(fg, x; linesearch = HagerZhangLineSearch(),
-                    retract = _retract, inner = _inner, transport! = _transport!,
-                    scale! = _scale!, add! = _add!,
-                    isometrictransport = (transport! == _transport! && inner == _inner),
-                    m = 10, maxiter = typemax(Int), gradtol = 1e-8, verbosity::Int = 0)
+struct LBFGS{T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
+    m::Int
+    maxiter::Int
+    gradtol::T
+    linesearch::L
+    verbosity::Int
+end
+LBFGS(m::Int = 8; maxiter = typemax(Int), gradtol::Real = 1e-8,
+        verbosity::Int = 0,
+        linesearch::AbstractLineSearch = HagerZhangLineSearch(;verbosity = verbosity - 2)) =
+    LBFGS(m, maxiter, gradtol, linesearch, verbosity)
 
+function optimize(fg, x, alg::LBFGS; retract = _retract, inner = _inner,
+                    transport! = _transport!, scale! = _scale!, add! = _add!,
+                    isometrictransport = (transport! == _transport! && inner == _inner))
+
+    verbosity = alg.verbosity
     f, g = fg(x)
     normgrad = sqrt(inner(x, g, g))
     normgradhistory = [normgrad]
@@ -19,18 +30,21 @@ function lbfgs(fg, x; linesearch = HagerZhangLineSearch(),
     dprev = d
     gprev = g
 
-    x, f, g, α, = linesearch(fg, x, d, (f, g);
-        initialguess = 1e-2, retract = retract, inner = inner, verbosity = verbosity-1)
+    x, f, g, dx, α = alg.linesearch(fg, x, d, (f, g);
+        initialguess = 1e-2, retract = retract, inner = inner)
     normgrad = sqrt(inner(x, g, g))
     push!(normgradhistory, normgrad)
 
     # set up InverseHessian approximation
-    gprev = transport!(gprev, xprev, dprev, α)
-    dprev = transport!(dprev, xprev, dprev, α)
+    gprev = transport!(gprev, xprev, dprev, α, x)
+    # dprev = transport!(dprev, xprev, dprev, α, x)
+    dprev = dx
     y = scale!(add!(gprev, g, -1), -1)
     s = scale!(dprev, α)
     ρ = 1/inner(x, s, y)
-    H = LBFGSInverseHessian(m,1,1, sizehint!([s], m), sizehint!([y], m), sizehint!([ρ], m))
+    @assert ρ > 0
+    m = alg.m
+    H = LBFGSInverseHessian(m, [s], [y], [ρ])
     d = let x = x
         scale!(H(g, (y1,y2)->inner(x, y1, y2), add!, scale!), -1)
     end
@@ -39,37 +53,46 @@ function lbfgs(fg, x; linesearch = HagerZhangLineSearch(),
         @info @sprintf("LBFGS: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e",
                         numiter, f, normgrad, α)
 
-    while numiter < maxiter && normgrad > gradtol
+    while numiter < alg.maxiter && normgrad > alg.gradtol
         numiter += 1
         xprev = x
-        dprev = d
         gprev = g
+        dprev = d
 
-        x, f, g, α, = linesearch(fg, x, d, (f, g);
-            initialguess = 1., retract = retract, inner = inner, verbosity = verbosity-1)
+        x, f, g, dx, α = alg.linesearch(fg, x, d, (f, g);
+            initialguess = 1., retract = retract, inner = inner)
         normgrad = sqrt(inner(x, g, g))
         push!(normgradhistory, normgrad)
-        if normgrad <= gradtol
+        if normgrad <= alg.gradtol
             break
         end
         # next search direction
-        for k = 1:length(H)
+        for k = length(H):-1:1
             @inbounds s, y, ρ = H[k]
-            s = transport!(s, xprev, dprev, α)
-            y = transport!(y, xprev, dprev, α)
+            s = transport!(s, xprev, dprev, α, x)
+            y = transport!(y, xprev, dprev, α, x)
             if !isometrictransport
                 ρ = 1/inner(x, s, y)
-                @assert ρ > 0
+                if ρ < 0
+                    for j = 1:k
+                        popfirst!(H)
+                    end
+                    break
+                end
             end
             @inbounds H[k] = (s, y, ρ)
         end
-        gprev = transport!(gprev, xprev, dprev, α)
-        dprev = transport!(dprev, xprev, dprev, α)
+        gprev = transport!(gprev, xprev, dprev, α, x)
+        # dprev = transport!(dprev, xprev, dprev, α, x)
+        dprev = dx
         y = scale!(add!(gprev, g, -1), -1)
         s = scale!(dprev, α)
         ρ = 1/inner(x, y, s)
-        @assert ρ > 0
-        push!(H, (s, y, ρ))
+        if ρ < 0
+            empty!(H)
+        else
+            push!(H, (s, y, ρ))
+        end
         d = let x = x
             scale!(H(g, (y1,y2)->inner(x, y1, y2), add!, scale!), -1)
         end
@@ -79,7 +102,7 @@ function lbfgs(fg, x; linesearch = HagerZhangLineSearch(),
                             numiter, f, normgrad, α)
     end
     if verbosity > 0
-        if normgrad <= gradtol
+        if normgrad <= alg.gradtol
             @info @sprintf("LBFGS: converged after %d iterations: f = %.12f, ‖∇f‖ = %.4e",
                             numiter, f, normgrad)
         else
@@ -97,7 +120,16 @@ mutable struct LBFGSInverseHessian{T1,T2,T3}
     S::Vector{T1}
     Y::Vector{T2}
     ρ::Vector{T3}
+    function LBFGSInverseHessian{T1,T2,T3}(maxlength::Int, S::Vector{T1}, Y::Vector{T2}, ρ::Vector{T3}) where {T1, T2, T3}
+        @assert length(S) == length(Y) == length(ρ)
+        l = length(S)
+        S = resize!(copy(S), maxlength)
+        Y = resize!(copy(Y), maxlength)
+        ρ = resize!(copy(ρ), maxlength)
+        return new{T1,T2,T3}(maxlength, l, 1, S, Y, ρ)
+    end
 end
+LBFGSInverseHessian(maxlength::Int, S::Vector{T1}, Y::Vector{T2}, ρ::Vector{T3}) where {T1, T2, T3} = LBFGSInverseHessian{T1, T2, T3}(maxlength, S, Y, ρ)
 
 Base.length(H::LBFGSInverseHessian) = H.length
 
@@ -123,18 +155,33 @@ end
 
 @inline function Base.push!(H::LBFGSInverseHessian, (s, y, ρ))
     if H.length < H.maxlength
-        push!(H.S, s)
-        push!(H.Y, y)
-        push!(H.ρ, ρ)
         H.length += 1
     else
         H.first = (H.first == H.maxlength ? 1 : H.first + 1)
-        @inbounds setindex!(H, (s, y, ρ), H.length)
     end
+    @inbounds setindex!(H, (s, y, ρ), H.length)
+    return H
+end
+@inline function Base.pop!(H::LBFGSInverseHessian)
+    @inbounds v = H[H.length]
+    H.length -= 1
+    return v
+end
+@inline function Base.popfirst!(H::LBFGSInverseHessian)
+    @inbounds v = H[H.first]
+    H.first = (H.first == H.maxlength ? 1 : H.first + 1)
+    H.length -= 1
+    return v
+end
+
+@inline function Base.empty!(H::LBFGSInverseHessian)
+    H.length = 0
+    H.first = 1
     return H
 end
 
 function (H::LBFGSInverseHessian)(g, inner, add!, scale!; α = similar(H.ρ))
+    length(H) == 0 && return deepcopy(g)
     q = deepcopy(g)
     for k = length(H):-1:1
         s, y, ρ = H[k]
