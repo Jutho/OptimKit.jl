@@ -41,23 +41,26 @@ x, fx, gx, normgradhistory = optimize(fg, x₀, algorithm; kwargs...)
 ```
 Here, the optimization problem (objective function) is specified as a function `fval, gval = fg(x)` that returns both the function value and its gradient at a given point `x`. The function value `fval` is assumed to be a real number of some type `T<:Real`. Both `x` and the gradient `gval` can be of any type, including tuples and named tuples. As a user, you should then also specify the following functions via keyword arguments
 
-*    `s = inner(x, g1, g2)`: compute the inner product between two gradients or similar objects at position `x`. The `x` dependence is useful for optimization on manifolds, where this function represents the metric; in particular it should be symmetric `inner(x, g1, g2) == inner(x, g2, g1)` and real-valued.
-*    `retract(x, g, α)`: take a step in direction `g` (same type as gradients) starting from point `x` and with step length `α`, returns the new `x(α)` and the local direction at that position, i.e. `dx(α)/dα`.
-*    `g = scale!(g, β)`: compute the equivalent of `g*β`, possibly in place, but we always use the return value. This is mostly used as `scale!(g, -1)` to compute the negative gradient as part of the step direction.
-*    `gdst = add!(gdst, gsrc, β)`: compute the equivalent of `gdst + gsrc*β`, possibly overwriting `gdst` in place, but we always use the return value
-*    `g = transport!(g, x, d, α)`: transport gradient `g` along the retraction of `x` in the direction `d` (same type as a gradient) with step length `α`, can be in place but the return value is used.
+*    `x, ξ = retract(x₀, η, α)`: take a step in direction `η` (same type as gradients) starting from point `x₀` and with step length `α`, returns the new ``x(α) = Rₓ₀(α * η)`` and the local tangent to this path at that position, i.e. ``ξ = D Rₓ₀(α * η)[η]`` (informally, ``ξ = dx(α) / dα``).
+*    `s = inner(x, ξ1, ξ2)`: compute the inner product between two gradients or similar objects at position `x`. The `x` dependence is useful for optimization on manifolds, where this function represents the metric; in particular it should be symmetric `inner(x, ξ1, ξ2) == inner(x, ξ2, ξ1)` and real-valued.
+*    `η = scale!(η, β)`: compute the equivalent of `η*β`, possibly in place, but we always use the return value. This is mostly used as `scale!(g, -1)` to compute the negative gradient as part of the step direction.
+*    `η = add!(η, ξ, β)`: compute the equivalent of `η + ξ*β`, possibly overwriting `η` in place, but we always use the return value
+*    `ξ = transport!(ξ, x, η, α)`: transport tangent vector `ξ` along the retraction of `x` in the direction `η` (same type as a gradient) with step length `α`, can be in place but the return value is used.
+
+Note that the gradient `g` of the objective function should satisfy ``d f(x(α)) / d α  = inner(x(α), ξ(α), g(x(α)))``.
 
 The `GradientDescent` algorithm only requires the first three, `ConjugateGradient` and `LBFGS` require all five functions. Default values are provided to make the optimization algorithms work with standard optimization problems where `x` is a vector or `Array`, i.e. they are given by
 ```julia
-_retract(x, d, α) = (x + α * d, d)
-_inner(x, v1, v2) = v1 === v2 ? LinearAlgebra.norm(v1)^2 : LinearAlgebra.dot(v1, v2)
-_transport!(v, x, d, α) = v
-_add!(vdst, vsrc, β) = LinearAlgebra.axpy!(β, vsrc, vdst)
-_scale!(v, β) = LinearAlgebra.rmul!(v, β)
+_retract(x, η, α) = (x + α * η, η)
+_inner(x, ξ1, ξ2) = ξ1 === ξ2 ? LinearAlgebra.norm(ξ1)^2 : LinearAlgebra.dot(ξ1, ξ2)
+_transport!(ξ, x, η, α) = ξ
+_add!(η, ξ, β) = LinearAlgebra.axpy!(β, ξ, η)
+_scale!(η, β) = LinearAlgebra.rmul!(η, β)
 ```
 
 Finally, there is one keyword argument `isometrictransport::Bool` to indicate whether the transport of vectors preserves their inner product, i.e. whether
 ```julia
-inner(x, g1, g2) == inner(retract(x, d, α), transport!(g1, x, d, α), transport!(g2, x, d, α))
+inner(x, ξ1, ξ2) == inner(retract(x, η, α), transport!(ξ1, x, η, α), transport!(ξ2, x, η, α))
 ```
-The default value is false, unless the default transport (`_transport!`) and inner product (`_inner`) are used.
+The default value is false, unless the default transport (`_transport!`) and inner product (`_inner`) are used. However, convergence of conjugate gradient and LBFGS is more robust (or theoretically proven) in the case of isometric transport. Note that isometric transport might not be the same as retraction transport, and thus, in particular
+``ξ != transport(η, x, η, α)``. However, when isometric transport is provided, we complement it with an isometric rotation such that ``ξ = D Rₓ₀(α * η)[η]`` and ``transport(η, x, η, α)`` are parallel. This is the so-called locking condition of [Huang, Gallivan and Absil](https://doi.org/10.1137/140955483), and the approach is described in section 4.1.

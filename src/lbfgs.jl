@@ -16,9 +16,10 @@ function optimize(fg, x, alg::LBFGS; retract = _retract, inner = _inner,
 
     verbosity = alg.verbosity
     f, g = fg(x)
+    numfg = 1
     normgrad = sqrt(inner(x, g, g))
     normgradhistory = [normgrad]
-    d = scale!(deepcopy(g), -1)
+    η = scale!(deepcopy(g), -1)
 
     numiter = 0
     verbosity >= 2 &&
@@ -27,51 +28,117 @@ function optimize(fg, x, alg::LBFGS; retract = _retract, inner = _inner,
     # Iteration 1: set up H
     numiter += 1
     xprev = x
-    dprev = d
+    ηprev = η
     gprev = g
 
-    x, f, g, dx, α = alg.linesearch(fg, x, d, (f, g);
+    x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
         initialguess = 1e-2, retract = retract, inner = inner)
+    numfg += nfg
     normgrad = sqrt(inner(x, g, g))
     push!(normgradhistory, normgrad)
 
     # set up InverseHessian approximation
-    gprev = transport!(gprev, xprev, dprev, α, x)
-    # dprev = transport!(dprev, xprev, dprev, α, x)
-    dprev = dx
-    y = scale!(add!(gprev, g, -1), -1)
-    s = scale!(dprev, α)
-    ρ = 1/inner(x, s, y)
+    if isometrictransport
+        # use trick from A BROYDEN CLASS OF QUASI-NEWTON METHODS FOR RIEMANNIAN OPTIMIZATION: define new isometric transport such that, applying it to transported ηprev, it returns a vector proportional to ξ
+        gprev = transport!(gprev, xprev, ηprev, α, x)
+        normη = sqrt(inner(xprev, ηprev, ηprev))
+        normξ = sqrt(inner(x, ξ, ξ))
+        β = normη/normξ
+        ξ₁ = transport!(deepcopy(ηprev), xprev, ηprev, α, x)
+        ξ₂ = scale!(ξ, normη/normξ)
+        ν₁ = add!(ξ₁, ξ₂, +1)
+        ν₂ = scale!(deepcopy(ξ₂), -2)
+        gprev = add!(gprev, ν₁, -2*inner(x, ν₁, gprev)/inner(x, ν₁, ν₁))
+        gprev = add!(gprev, ν₂, -2*inner(x, ν₂, gprev)/inner(x, ν₂, ν₂))
+        ηprev = ξ₂
+        # ξ₁ = add!(ξ₁, ν₁, -2*inner(x, ν₁, ξ₁)/inner(x, ν₁, ν₁))
+        # ξ₁ = add!(ξ₁, ν₂, -2*inner(x, ν₂, ξ₁)/inner(x, ν₂, ν₂))
+        # @show ξ₁, ξ₂
+        y = add!(scale!(deepcopy(g), 1/β), gprev, -1)
+        s = scale!(ηprev, α)
+        ρ = 1/inner(x, s, y)
+    else # scaled transport, make sure previous direction does not grow in norm
+        gprev = transport!(gprev, xprev, ηprev, α, x)
+        normη = sqrt(inner(xprev, ηprev, ηprev))
+        normξ = sqrt(inner(x, ξ, ξ))
+        ηprev = ξ
+        if normξ > normη
+            β = normη/normξ
+            ηprev = scale!(ηprev, β)
+            y = add!(scale!(deepcopy(g), 1/β), gprev, -1)
+        else
+            y = add!(deepcopy(g), gprev, -1)
+        end
+        s = scale!(ηprev, α)
+        ρ = 1/inner(x, s, y)
+    end
     @assert ρ > 0
     m = alg.m
     H = LBFGSInverseHessian(m, [s], [y], [ρ])
-    d = let x = x
-        scale!(H(g, (y1,y2)->inner(x, y1, y2), add!, scale!), -1)
+    η = let x = x
+        scale!(H(g, (ξ1, ξ2)->inner(x, ξ1, ξ2), add!, scale!), -1)
     end
 
     verbosity >= 2 &&
-        @info @sprintf("LBFGS: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e",
-                        numiter, f, normgrad, α)
+        @info @sprintf("LBFGS: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, m = %d",
+                        numiter, f, normgrad, α, length(H))
 
     while numiter < alg.maxiter && normgrad > alg.gradtol
         numiter += 1
         xprev = x
         gprev = g
-        dprev = d
+        ηprev = η
 
-        x, f, g, dx, α = alg.linesearch(fg, x, d, (f, g);
+        x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
             initialguess = 1., retract = retract, inner = inner)
+        numfg += nfg
         normgrad = sqrt(inner(x, g, g))
         push!(normgradhistory, normgrad)
         if normgrad <= alg.gradtol
             break
         end
         # next search direction
-        for k = length(H):-1:1
-            @inbounds s, y, ρ = H[k]
-            s = transport!(s, xprev, dprev, α, x)
-            y = transport!(y, xprev, dprev, α, x)
-            if !isometrictransport
+        if isometrictransport
+            # use trick from A BROYDEN CLASS OF QUASI-NEWTON METHODS FOR RIEMANNIAN OPTIMIZATION: define new isometric transport such that, applying it to transported ηprev, it returns a vector proportional to ξ
+            gprev = transport!(gprev, xprev, ηprev, α, x)
+            for k = length(H):-1:1
+                @inbounds s, y, ρ = H[k]
+                s = transport!(s, xprev, ηprev, α, x)
+                y = transport!(y, xprev, ηprev, α, x)
+                H[k] = (s, y, ρ)
+            end
+            normη = sqrt(inner(xprev, ηprev, ηprev))
+            normξ = sqrt(inner(x, ξ, ξ))
+            β = normη/normξ
+            ξ₁ = transport!(ηprev, xprev, ηprev, α, x)
+            ξ₂ = ξ
+            if ξ₁ !== ξ
+                ξ₂ = scale!(ξ, normη/normξ)
+                ν₁ = add!(deepcopy(ξ₁), ξ₂, +1)
+                ν₂ = scale!(deepcopy(ξ₂), -2)
+                gprev = add!(gprev, ν₁, -2*inner(x, ν₁, gprev)/inner(x, ν₁, ν₁))
+                gprev = add!(gprev, ν₂, -2*inner(x, ν₂, gprev)/inner(x, ν₂, ν₂))
+                for k = length(H):-1:1
+                    @inbounds s, y, ρ = H[k]
+                    s = add!(s, ν₁, -2*inner(x, ν₁, s)/inner(x, ν₁, ν₁))
+                    s = add!(s, ν₂, -2*inner(x, ν₂, s)/inner(x, ν₂, ν₂))
+                    y = add!(y, ν₁, -2*inner(x, ν₁, y)/inner(x, ν₁, ν₁))
+                    y = add!(y, ν₂, -2*inner(x, ν₂, y)/inner(x, ν₂, ν₂))
+                    H[k] = (s, y, ρ)
+                end
+            end
+            ηprev = ξ₂
+            y = add!(scale!(deepcopy(g), 1/β), gprev, -1)
+            s = scale!(ηprev, α)
+            ρ = 1/inner(x, s, y)
+            @assert ρ > 0 # should be the case because of wolfe
+            push!(H, (s, y, ρ))
+        else # scaled transport, make sure previous direction does not grow in norm
+            gprev = transport!(gprev, xprev, ηprev, α, x)
+            for k = length(H):-1:1
+                @inbounds s, y, ρ = H[k]
+                s = transport!(s, xprev, ηprev, α, x)
+                y = transport!(y, xprev, ηprev, α, x)
                 ρ = 1/inner(x, s, y)
                 if ρ < 0
                     for j = 1:k
@@ -79,27 +146,33 @@ function optimize(fg, x, alg::LBFGS; retract = _retract, inner = _inner,
                     end
                     break
                 end
+                @inbounds H[k] = (s, y, ρ)
             end
-            @inbounds H[k] = (s, y, ρ)
+            normη = sqrt(inner(xprev, ηprev, ηprev))
+            normξ = sqrt(inner(x, ξ, ξ))
+            ηprev = ξ
+            if normξ > normη
+                β = normη/normξ
+                ηprev = scale!(ηprev, β)
+                y = add!(scale!(deepcopy(g), 1/β), gprev, -1)
+            else
+                y = add!(deepcopy(g), gprev, -1)
+            end
+            s = scale!(ηprev, α)
+            ρ = 1/inner(x, s, y)
+            if ρ < 0
+                empty!(H)
+            else
+                push!(H, (s, y, ρ))
+            end
         end
-        gprev = transport!(gprev, xprev, dprev, α, x)
-        # dprev = transport!(dprev, xprev, dprev, α, x)
-        dprev = dx
-        y = scale!(add!(gprev, g, -1), -1)
-        s = scale!(dprev, α)
-        ρ = 1/inner(x, y, s)
-        if ρ < 0
-            empty!(H)
-        else
-            push!(H, (s, y, ρ))
-        end
-        d = let x = x
-            scale!(H(g, (y1,y2)->inner(x, y1, y2), add!, scale!), -1)
+        η = let x = x
+            scale!(H(g, (ξ1, ξ2)->inner(x, ξ1, ξ2), add!, scale!), -1)
         end
 
         verbosity >= 2 &&
-            @info @sprintf("LBFGS: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e",
-                            numiter, f, normgrad, α)
+            @info @sprintf("LBFGS: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, m = %d",
+                            numiter, f, normgrad, α, length(H))
     end
     if verbosity > 0
         if normgrad <= alg.gradtol
@@ -110,7 +183,7 @@ function optimize(fg, x, alg::LBFGS; retract = _retract, inner = _inner,
                             f, normgrad)
         end
     end
-    return x, f, g, normgradhistory
+    return x, f, g, numfg, normgradhistory
 end
 
 mutable struct LBFGSInverseHessian{T1,T2,T3}
@@ -168,7 +241,7 @@ end
     return v
 end
 @inline function Base.popfirst!(H::LBFGSInverseHessian)
-    @inbounds v = H[H.first]
+    @inbounds v = H[1]
     H.first = (H.first == H.maxlength ? 1 : H.first + 1)
     H.length -= 1
     return v

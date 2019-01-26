@@ -15,17 +15,19 @@ function optimize(fg, x, alg::GradientDescent; retract = _retract, inner = _inne
 
     verbosity = alg.verbosity
     f, g = fg(x)
+    numfg = 1
     normgrad = sqrt(inner(x, g, g))
     normgradhistory = [normgrad]
-    d = scale!(deepcopy(g), -1)
+    η = scale!(deepcopy(g), -1)
     α = 1e-2
     numiter = 0
     verbosity >= 2 &&
         @info @sprintf("GD: initializing with f = %.12f, ‖∇f‖ = %.4e", f, normgrad)
     while numiter < alg.maxiter
         numiter += 1
-        x, f, g, dx, α = alg.linesearch(fg, x, d, (f, g);
+        x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
             initialguess = 1.1α, retract = retract, inner = inner)
+        numfg += nfg
         normgrad = sqrt(inner(x, g, g))
         push!(normgradhistory, normgrad)
         if normgrad <= alg.gradtol
@@ -35,7 +37,7 @@ function optimize(fg, x, alg::GradientDescent; retract = _retract, inner = _inne
             @info @sprintf("GD: iter %4d: f = %.12f, ‖∇f‖ = %.4e, step size = %.2e",
                             numiter, f, normgrad, α)
         # next search direction
-        d = scale!(deepcopy(g), -1)
+        η = scale!(deepcopy(g), -1)
     end
     if verbosity > 0
         if normgrad <= alg.gradtol
@@ -46,5 +48,5 @@ function optimize(fg, x, alg::GradientDescent; retract = _retract, inner = _inne
                             f, normgrad)
         end
     end
-    return x, f, g, normgradhistory
+    return x, f, g, numfg, normgradhistory
 end

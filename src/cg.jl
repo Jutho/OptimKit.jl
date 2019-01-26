@@ -19,9 +19,10 @@ function optimize(fg, x, alg::ConjugateGradient; retract = _retract, inner = _in
 
     verbosity = alg.verbosity
     f, g = fg(x)
+    numfg = 1
     normgrad = sqrt(inner(x, g, g))
     normgradhistory = [normgrad]
-    d = scale!(deepcopy(g), -1)
+    η = scale!(deepcopy(g), -1)
     α = 1e-2
 
     numiter = 0
@@ -30,25 +31,56 @@ function optimize(fg, x, alg::ConjugateGradient; retract = _retract, inner = _in
     while numiter < alg.maxiter
         numiter += 1
         xprev = x
-        dprev = d
+        ηprev = η
         gprev = g
 
-        x, f, g, dx, α = alg.linesearch(fg, x, d, (f, g);
+        x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
             initialguess = α, retract = retract, inner = inner)
         normgrad = sqrt(inner(x, g, g))
+        numfg += nfg
         push!(normgradhistory, normgrad)
         if normgrad <= alg.gradtol
             break
         end
         # next search direction
-        gprev = transport!(gprev, xprev, dprev, α, x)
-        # dprev = transport!(dprev, xprev, dprev, α, x)
-        dprev = dx
-        y = add!(deepcopy(g), gprev, -1)
-        β = let x = x
-            alg.flavor(g, gprev, y, dprev, (d1,d2)->inner(x,d1,d2))
+        if isometrictransport
+            # use trick from A BROYDEN CLASS OF QUASI-NEWTON METHODS FOR RIEMANNIAN OPTIMIZATION: define new isometric transport such that, applying it to transported ηprev, it returns a vector proportional to ξ but with the norm of ηprev
+            gprev = transport!(gprev, xprev, ηprev, α, x)
+            normη = sqrt(inner(xprev, ηprev, ηprev))
+            normξ = sqrt(inner(x, ξ, ξ))
+            ξ₁ = transport!(ηprev, xprev, ηprev, α, x)
+            ξ₂ = ξ
+            if ξ₁ !== ξ
+                # if ξ₁ == ξ, it also means normξ = normη, since the latter is preserved
+                ξ₂ = scale!(ξ, normη/normξ)
+                ν₁ = add!(deepcopy(ξ₁), ξ₂, +1)
+                ν₂ = scale!(deepcopy(ξ₂), -2)
+                gprev = add!(gprev, ν₁, -2*inner(x, ν₁, gprev)/inner(x, ν₁, ν₁))
+                gprev = add!(gprev, ν₂, -2*inner(x, ν₂, gprev)/inner(x, ν₂, ν₂))
+                # @show normη normξ
+                # ξ₁ = add!(ξ₁, ν₁, -2*inner(x, ν₁, ξ₁)/inner(x, ν₁, ν₁))
+                # ξ₁ = add!(ξ₁, ν₂, -2*inner(x, ν₂, ξ₁)/inner(x, ν₂, ν₂))
+                # ξ₁ = add!(ξ₁, ξ₂, -1)
+                # @show inner(x, ξ₁, ξ₁)
+            end
+            ηprev = ξ₂
+            y = add!(scale!(deepcopy(g), normξ/normη), gprev, -1)
+        else # scaled transport, make sure previous direction does not grow in norm
+            gprev = transport!(gprev, xprev, ηprev, α, x)
+            normη = sqrt(inner(xprev, ηprev, ηprev))
+            normξ = sqrt(inner(x, ξ, ξ))
+            ηprev = ξ
+            if normξ > normη
+                ηprev = scale!(ηprev, normη/normξ)
+                y = add!(scale!(deepcopy(g), normξ/normη), gprev, -1)
+            else
+                y = add!(deepcopy(g), gprev, -1)
+            end
         end
-        d = add!(scale!(deepcopy(g), -1), dprev, β)
+        β = let x = x
+            alg.flavor(g, gprev, y, ηprev, (η₁,η₂)->inner(x,η₁,η₂))
+        end
+        η = add!(scale!(deepcopy(g), -1), ηprev, β)
 
         verbosity >= 2 &&
             @info @sprintf("CG: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, β = %.2e",
@@ -63,7 +95,7 @@ function optimize(fg, x, alg::ConjugateGradient; retract = _retract, inner = _in
                             f, normgrad)
         end
     end
-    return x, f, g, normgradhistory
+    return x, f, g, numfg, normgradhistory
 end
 
 struct HagerZhang{T<:Real} <: CGFlavor
