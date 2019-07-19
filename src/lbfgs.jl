@@ -90,7 +90,7 @@ function optimize(fg, x, alg::LBFGS; retract = _retract, inner = _inner,
         ηprev = η
 
         x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
-            initialguess = 1., retract = retract, inner = inner)
+            initialguess = 1., acceptfirst = true, retract = retract, inner = inner)
         numfg += nfg
         normgrad = sqrt(inner(x, g, g))
         push!(normgradhistory, normgrad)

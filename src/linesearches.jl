@@ -38,6 +38,7 @@ struct HagerZhangLineSearchIterator{T<:Real,F₁,F₂,F₃,X,G}
     p₀::LineSearchPoint{T,X,G} # initial position, containing x₀, f₀, g₀
     η₀::G # search direction
     α₀::T # initial guess for step size
+    acceptfirst::Bool # whether or not the initial guess can be accepted (e.g. LBFGS)
     parameters::HagerZhangLineSearch{T}
 end
 
@@ -71,6 +72,7 @@ function update(iter::HagerZhangLineSearchIterator, a::LineSearchPoint, b::LineS
     fmax = ϕ₀ + iter.parameters.ϵ
     !(a.α < αc < b.α) && return a, b, 0 # U0
     c = takestep(iter, αc)
+    @assert isfinite(c.ϕ)
     iter.parameters.verbosity > 2 &&
         @info @sprintf("Linesearch update: try c = %.2e, dϕᶜ = %.2e, ϕᶜ - ϕ₀ = %.2e", c.α, c.dϕ, c.ϕ - ϕ₀)
     if c.dϕ > 0 # U1
@@ -123,7 +125,7 @@ function bracket(iter::HagerZhangLineSearchIterator{T}, α = one(T)) where {T}
     while true
         c = takestep(iter, α)
         numfg += 1
-        while !(isfinite(c.ϕ) && isfinite(c.ϕ))
+        while !(isfinite(c.ϕ) && isfinite(c.dϕ))
             α = (a.α + α)/2
             c = takestep(iter, α)
             numfg += 1
@@ -136,7 +138,7 @@ function bracket(iter::HagerZhangLineSearchIterator{T}, α = one(T)) where {T}
         if c.ϕ > fmax # B2
             a, b, nfg = bisect(iter, iter.p₀, c)
             return a, b, numfg + nfg
-        else # B3
+        else# B3
             a = c
             α *= iter.parameters.ρ
         end
@@ -149,13 +151,19 @@ function Base.iterate(iter::HagerZhangLineSearchIterator)
     c₂ = iter.parameters.c₂
     ϵ = iter.parameters.ϵ
     p₀ = iter.p₀
-    # a = takestep(iter, iter.α₀)
-    # if checkexactwolfe(a, p₀, c₁, c₂) || checkapproxwolfe(a, p₀, c₁, c₂, ϵ)
-    #     return (a.x, a.f, a.∇f, a.ξ, a.α, a.dϕ), (a, a, true)
-    # end
+    if iter.acceptfirst
+        a = takestep(iter, iter.α₀)
+        if checkexactwolfe(a, p₀, c₁, c₂) || checkapproxwolfe(a, p₀, c₁, c₂, ϵ)
+            return (a.x, a.f, a.∇f, a.ξ, a.α, a.dϕ), (a, a, 1, true)
+        end
+    end
 
     a, b, numfg = bracket(iter, iter.α₀)
-    return (a.x, a.f, a.∇f, a.ξ, a.α, a.dϕ), (a, b, numfg, false)
+    if a.α == b.α
+        return (a.x, a.f, a.∇f, a.ξ, a.α, a.dϕ), (a, b, numfg, true)
+    else
+        return (a.x, a.f, a.∇f, a.ξ, a.α, a.dϕ), (a, b, numfg, false)
+    end
 end
 
 function Base.iterate(iter::HagerZhangLineSearchIterator, state::Tuple{LineSearchPoint,LineSearchPoint,Int,Bool})
@@ -213,10 +221,11 @@ HagerZhangLineSearch(; c₁::Real = .1, c₂::Real = .9, ϵ::Real = 1e-6,
     HagerZhangLineSearch(promote(c₁, c₂, ϵ, θ, γ, ρ)..., maxiter, verbosity)
 
 function (ls::HagerZhangLineSearch)(fg, x₀, η₀, (f0, g0) = fg(x₀);
-                    retract = _retract, inner = _inner, initialguess = 1.)
+                    retract = _retract, inner = _inner,
+                    initialguess = 1., acceptfirst = false)
 
     p₀ = LineSearchPoint(zero(f0), f0, inner(x₀, g0, η₀), x₀, f0, g0, η₀)
-    iter = HagerZhangLineSearchIterator(fg, retract, inner, p₀, η₀, initialguess, ls)
+    iter = HagerZhangLineSearchIterator(fg, retract, inner, p₀, η₀, initialguess, acceptfirst, ls)
     next = iterate(iter)
     @assert next !== nothing
     k = 1
