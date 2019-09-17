@@ -13,7 +13,7 @@ struct LineSearchPoint{T<:Real,X,G}
 end
 
 function checkapproxwolfe(x::LineSearchPoint, x₀::LineSearchPoint, c₁, c₂, ϵ)
-    return (x.ϕ <= x.ϕ + ϵ) && ((2*c₁-1)*x₀.dϕ >= x.dϕ >= c₂*x₀.dϕ)
+    return (x.ϕ <= x₀.ϕ + ϵ) && ((2*c₁-1)*x₀.dϕ >= x.dϕ >= c₂*x₀.dϕ)
 end
 function checkexactwolfe(x::LineSearchPoint, x₀::LineSearchPoint, c₁, c₂)
     return (x.ϕ <= x₀.ϕ + c₁*x.α*x₀.dϕ )&& (x.dϕ > c₂*x₀.dϕ)
