@@ -68,6 +68,10 @@ secant(a, b, fa, fb) = (a*fb-b*fa)/(fb-fa)
 
 function update(iter::HagerZhangLineSearchIterator, a::LineSearchPoint, b::LineSearchPoint, αc)
     # interval has (a.dϕ < 0, a.ϕ <= f₀+ϵ), (b.dϕ >= 0)
+    p₀ = iter.p₀
+    c₁ = iter.parameters.c₁
+    c₂ = iter.parameters.c₂
+    ϵ = iter.parameters.ϵ
     ϕ₀ = iter.p₀.f
     fmax = ϕ₀ + iter.parameters.ϵ
     !(a.α < αc < b.α) && return a, b, 0 # U0
@@ -75,9 +79,12 @@ function update(iter::HagerZhangLineSearchIterator, a::LineSearchPoint, b::LineS
     @assert isfinite(c.ϕ)
     iter.parameters.verbosity > 2 &&
         @info @sprintf("Linesearch update: try c = %.2e, dϕᶜ = %.2e, ϕᶜ - ϕ₀ = %.2e", c.α, c.dϕ, c.ϕ - ϕ₀)
-    if c.dϕ > 0 # U1
+    if checkexactwolfe(c, p₀, c₁, c₂) || checkapproxwolfe(c, p₀, c₁, c₂, ϵ)
+        return c, c, 1
+    end
+    if c.dϕ >= zero(c.dϕ) # U1
         return a, c, 1
-    elseif c.dϕ < 0 && c.ϕ <= fmax # U2
+    elseif c.dϕ < zero(c.dϕ) && c.ϕ <= fmax # U2
         return c, b, 1
     else # U3
         a, b, nfg = bisect(iter, a, c)
@@ -88,24 +95,28 @@ end
 function bisect(iter::HagerZhangLineSearchIterator, a::LineSearchPoint, b::LineSearchPoint)
     # applied when (a.dϕ < 0, a.ϕ <= f₀+ϵ), (b.dϕ < 0, b.ϕ > f₀+ϵ)
     θ = iter.parameters.θ
-    fmax = iter.p₀.f + iter.parameters.ϵ
+    p₀ = iter.p₀
+    c₁ = iter.parameters.c₁
+    c₂ = iter.parameters.c₂
+    ϵ = iter.parameters.ϵ
+    fmax = p₀.f + ϵ
     numfg = 0
     while true
-
         if b.α - a.α < eps()
             error(@sprintf("Linesearch bisection failure: [a, b] = [%.2e, %.2e], b-a = %.2e, dϕᵃ = %.2e, dϕᵇ = %.2e, (ϕᵇ - ϕᵃ)/(b-a) = %.2e", a.α, b.α, b.α - a.α, a.dϕ, b.dϕ, (b.ϕ - a.ϕ)/(b.α - a.α)))
         end
-
         αc = (1 - θ) * a.α + θ * b.α
         c = takestep(iter, αc)
         numfg += 1
         if iter.parameters.verbosity > 2
             @info @sprintf(
             """Linesearch bisect: [a, b] = [%.2e, %.2e], b-a = %.2e, dϕᵃ = %.2e, dϕᵇ = %.2e, (ϕᵇ - ϕᵃ) = %.2e
-            ↪︎ c = %.2e, dϕᶜ = %.2e, ϕᶜ - ϕᵃ = %.2e""",
-            a.α, b.α, b.α-a.α, a.dϕ, b.dϕ, (b.ϕ - a.ϕ), c.α, c.dϕ, c.ϕ - a.ϕ)
+            ↪︎ c = %.2e, dϕᶜ = %.2e, ϕᶜ - ϕᵃ = %.2e, wolfe = %d, approxwolfe = %d""",
+            a.α, b.α, b.α-a.α, a.dϕ, b.dϕ, (b.ϕ - a.ϕ), c.α, c.dϕ, c.ϕ - a.ϕ, checkexactwolfe(c, p₀, c₁, c₂), checkapproxwolfe(c, p₀, c₁, c₂, ϵ))
         end
-
+        if checkexactwolfe(c, p₀, c₁, c₂) || checkapproxwolfe(c, p₀, c₁, c₂, ϵ)
+            return c, c, numfg
+        end
         if c.dϕ >= 0 # U3.a
             return a, c, numfg
         elseif c.ϕ <= fmax # U3.b
@@ -116,22 +127,25 @@ function bisect(iter::HagerZhangLineSearchIterator, a::LineSearchPoint, b::LineS
     end
 end
 
-function bracket(iter::HagerZhangLineSearchIterator{T}, α = one(T)) where {T}
+function bracket(iter::HagerZhangLineSearchIterator{T}, c::LineSearchPoint) where {T}
     numfg = 0
-    a = iter.p₀
-    fmax = a.f + iter.parameters.ϵ
+    p₀ = iter.p₀
+    c₁ = iter.parameters.c₁
+    c₂ = iter.parameters.c₂
+    ϵ = iter.parameters.ϵ
+    a = p₀
+    fmax = a.f + ϵ
     iter.parameters.verbosity > 2 &&
         @info @sprintf("Linesearch start: dϕ₀ = %.2e, ϕ₀ = %.2e", a.dϕ, a.ϕ)
+    α = c.α
     while true
-        c = takestep(iter, α)
-        numfg += 1
         while !(isfinite(c.ϕ) && isfinite(c.dϕ))
             α = (a.α + α)/2
             c = takestep(iter, α)
             numfg += 1
         end
         if iter.parameters.verbosity > 2
-            @info @sprintf("Linesearch bracket: try c = %.2e, dϕᶜ = %.2e, ϕᶜ - ϕ₀ = %.2e", c.α, c.dϕ, c.ϕ - a.ϕ)
+            @info @sprintf("Linesearch bracket: try c = %.2e, dϕᶜ = %.2e, ϕᶜ - ϕ₀ = %.2e, wolfe = %d, approxwolfe = %d", c.α, c.dϕ, c.ϕ - p₀.ϕ, checkexactwolfe(c, p₀, c₁, c₂), checkapproxwolfe(c, p₀, c₁, c₂, ϵ))
         end
         c.dϕ >= 0 && return a, c, numfg# B1
         # from here: c.dϕ < 0
@@ -141,6 +155,11 @@ function bracket(iter::HagerZhangLineSearchIterator{T}, α = one(T)) where {T}
         else# B3
             a = c
             α *= iter.parameters.ρ
+            c = takestep(iter, α)
+            numfg += 1
+            # if checkexactwolfe(c, p₀, c₁, c₂) || checkapproxwolfe(c, p₀, c₁, c₂, ϵ)
+            #     return c, c, numfg
+            # end
         end
     end
 end
@@ -151,14 +170,14 @@ function Base.iterate(iter::HagerZhangLineSearchIterator)
     c₂ = iter.parameters.c₂
     ϵ = iter.parameters.ϵ
     p₀ = iter.p₀
+    a = takestep(iter, iter.α₀)
     if iter.acceptfirst
-        a = takestep(iter, iter.α₀)
         if checkexactwolfe(a, p₀, c₁, c₂) || checkapproxwolfe(a, p₀, c₁, c₂, ϵ)
             return (a.x, a.f, a.∇f, a.ξ, a.α, a.dϕ), (a, a, 1, true)
         end
     end
-
-    a, b, numfg = bracket(iter, iter.α₀)
+    a, b, numfg = bracket(iter, a)
+    numfg += 1 # from takestep few lines above
     if a.α == b.α
         return (a.x, a.f, a.∇f, a.ξ, a.α, a.dϕ), (a, b, numfg, true)
     else
@@ -181,35 +200,30 @@ function Base.iterate(iter::HagerZhangLineSearchIterator, state::Tuple{LineSearc
     αc = secant(a.α, b.α, a.dϕ, b.dϕ)
     A, B, nfg = update(iter, a, b, αc)
     numfg += nfg
+    if A.α == B.α
+        return (A.x, A.f, A.∇f, A.ξ, A.α, A.dϕ), (A, B, numfg, true)
+    end
     if αc == B.α
-        if checkexactwolfe(B, p₀, c₁, c₂) || checkapproxwolfe(B, p₀, c₁, c₂, ϵ)
-            return (B.x, B.f, B.∇f, B.ξ, B.α, B.dϕ), (a, b, numfg, true)
-        end
         αc = secant(b.α, B.α, b.dϕ, B.dϕ)
         a, b, nfg = update(iter, A, B, αc)
         numfg += nfg
     elseif αc == A.α
-        if checkexactwolfe(A, p₀, c₁, c₂) || checkapproxwolfe(A, p₀, c₁, c₂, ϵ)
-            return (A.x, A.f, A.∇f, A.ξ, A.α, A.dϕ), (a, b, numfg, true)
-        end
         αc = secant(a.α, A.α, a.dϕ, A.dϕ)
         a, b, nfg = update(iter, A, B, αc)
         numfg += nfg
     else
         a, b = A, B
     end
+    if a.α == b.α
+        return (a.x, a.f, a.∇f, a.ξ, a.α, a.dϕ), (a, b, numfg, true)
+    end
     # end secant2
     if b.α - a.α > iter.parameters.γ * dα
         a, b, nfg = update(iter, a, b, (a.α + b.α)/2)
         numfg += nfg
     end
-    awolfe = checkexactwolfe(a, p₀, c₁, c₂) || checkapproxwolfe(a, p₀, c₁, c₂, ϵ)
-    bwolfe = checkexactwolfe(b, p₀, c₁, c₂) || checkapproxwolfe(b, p₀, c₁, c₂, ϵ)
-
-    if a.ϕ < b.ϕ && awolfe
+    if a.α == b.α
         return (a.x, a.f, a.∇f, a.ξ, a.α, a.dϕ), (a, b, numfg, true)
-    elseif bwolfe
-        return (b.x, b.f, b.∇f, b.ξ, b.α, b.dϕ), (a, b, numfg, true)
     else
         return (a.x, a.f, a.∇f, a.ξ, a.α, a.dϕ), (a, b, numfg, false)
     end
