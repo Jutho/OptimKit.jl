@@ -45,9 +45,9 @@ Here, the optimization problem (objective function) is specified as a function `
 *    `s = inner(x, ξ1, ξ2)`: compute the inner product between two gradients or similar objects at position `x`. The `x` dependence is useful for optimization on manifolds, where this function represents the metric; in particular it should be symmetric `inner(x, ξ1, ξ2) == inner(x, ξ2, ξ1)` and real-valued.
 *    `η = scale!(η, β)`: compute the equivalent of `η*β`, possibly in place, but we always use the return value. This is mostly used as `scale!(g, -1)` to compute the negative gradient as part of the step direction.
 *    `η = add!(η, ξ, β)`: compute the equivalent of `η + ξ*β`, possibly overwriting `η` in place, but we always use the return value
-*    `ξ = transport!(ξ, x, η, α)`: transport tangent vector `ξ` along the retraction of `x` in the direction `η` (same type as a gradient) with step length `α`, can be in place but the return value is used.
+*    `ξ = transport!(ξ, x, η, α, x′)`: transport tangent vector `ξ` along the retraction of `x` in the direction `η` (same type as a gradient) with step length `α`, can be in place but the return value is used. Transport also receives `x′ = retract(x, η, α)[1]` as final argument, which has been computed before and can contain useful data that does not need to be recomputed
 
-Note that the gradient `g` of the objective function should satisfy ``d f(x(α)) / d α  = inner(x(α), ξ(α), g(x(α)))``.
+Note that the gradient `g` of the objective function should satisfy ``d f(x(α)) / d α  = inner(x(α), ξ(α), g(x(α)))``. There is a utility function `optimtest` to facilitate testing this compatibility relation for your given choice of `fg`, `retract` and `inner`.
 
 The `GradientDescent` algorithm only requires the first three, `ConjugateGradient` and `LBFGS` require all five functions. Default values are provided to make the optimization algorithms work with standard optimization problems where `x` is a vector or `Array`, i.e. they are given by
 ```julia
@@ -63,4 +63,4 @@ Finally, there is one keyword argument `isometrictransport::Bool` to indicate wh
 inner(x, ξ1, ξ2) == inner(retract(x, η, α), transport!(ξ1, x, η, α), transport!(ξ2, x, η, α))
 ```
 The default value is false, unless the default transport (`_transport!`) and inner product (`_inner`) are used. However, convergence of conjugate gradient and LBFGS is more robust (or theoretically proven) in the case of isometric transport. Note that isometric transport might not be the same as retraction transport, and thus, in particular
-``ξ != transport(η, x, η, α)``. However, when isometric transport is provided, we complement it with an isometric rotation such that ``ξ = D Rₓ₀(α * η)[η]`` and ``transport(η, x, η, α)`` are parallel. This is the so-called locking condition of [Huang, Gallivan and Absil](https://doi.org/10.1137/140955483), and the approach is described in section 4.1.
+``ξ != transport(η, x, η, α, x′)``. However, when isometric transport is provided, we complement it with an isometric rotation such that ``ξ = D Rₓ₀(α * η)[η]`` and ``transport(η, x, η, α)`` are parallel. This is the so-called locking condition of [Huang, Gallivan and Absil](https://doi.org/10.1137/140955483), and the approach is described in section 4.1.
