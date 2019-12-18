@@ -6,12 +6,13 @@ struct ConjugateGradient{F<:CGFlavor,T<:Real,L<:AbstractLineSearch} <: Optimizat
     maxiter::Int
     gradtol::T
     linesearch::L
+    restart::Int
     verbosity::Int
 end
 ConjugateGradient(; flavor = HagerZhang(), maxiter = typemax(Int), gradtol::Real = 1e-8,
-        verbosity::Int = 0,
+        restart = 50, verbosity::Int = 0,
         linesearch::AbstractLineSearch = HagerZhangLineSearch(;verbosity = verbosity - 2)) =
-    ConjugateGradient(flavor, maxiter, gradtol, linesearch, verbosity)
+    ConjugateGradient(flavor, maxiter, gradtol, linesearch, restart, verbosity)
 
 function optimize(fg, x, alg::ConjugateGradient; retract = _retract, inner = _inner,
                     transport! = _transport!, scale! = _scale!, add! = _add!,
@@ -80,7 +81,12 @@ function optimize(fg, x, alg::ConjugateGradient; retract = _retract, inner = _in
         β = let x = x
             alg.flavor(g, gprev, y, ηprev, (η₁,η₂)->inner(x,η₁,η₂))
         end
-        η = add!(scale!(deepcopy(g), -1), ηprev, β)
+        η = scale!(deepcopy(g), -1)
+        if mod(numiter, restart) == 0
+            β = zero(β)
+        else
+            η = add!(η, ηprev, β)
+        end
 
         verbosity >= 2 &&
             @info @sprintf("CG: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, β = %.2e",
