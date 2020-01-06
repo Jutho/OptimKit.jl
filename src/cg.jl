@@ -82,7 +82,7 @@ function optimize(fg, x, alg::ConjugateGradient; retract = _retract, inner = _in
             alg.flavor(g, gprev, y, ηprev, (η₁,η₂)->inner(x,η₁,η₂))
         end
         η = scale!(deepcopy(g), -1)
-        if mod(numiter, restart) == 0
+        if mod(numiter, alg.restart) == 0
             β = zero(β)
         else
             η = add!(η, ηprev, β)
