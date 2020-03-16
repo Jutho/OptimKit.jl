@@ -179,7 +179,7 @@ function optimize(fg, x, alg::LBFGS; retract = _retract, inner = _inner,
             @info @sprintf("LBFGS: converged after %d iterations: f = %.12f, ‖∇f‖ = %.4e",
                             numiter, f, normgrad)
         else
-            @warn @sprintf("LBGFS: not converged to requested tol: f = %.12f, ‖∇f‖ = %.4e",
+            @warn @sprintf("LBFGS: not converged to requested tol: f = %.12f, ‖∇f‖ = %.4e",
                             f, normgrad)
         end
     end
