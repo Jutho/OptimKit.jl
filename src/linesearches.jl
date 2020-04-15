@@ -234,11 +234,15 @@ HagerZhangLineSearch(; c₁::Real = .1, c₂::Real = .9, ϵ::Real = 1e-6,
                         maxiter = typemax(Int), verbosity::Int = 0) =
     HagerZhangLineSearch(promote(c₁, c₂, ϵ, θ, γ, ρ)..., maxiter, verbosity)
 
-function (ls::HagerZhangLineSearch)(fg, x₀, η₀, (f0, g0) = fg(x₀);
+function (ls::HagerZhangLineSearch)(fg, x₀, η₀, (f₀, g₀) = fg(x₀);
                     retract = _retract, inner = _inner,
                     initialguess = 1., acceptfirst = false)
 
-    p₀ = LineSearchPoint(zero(f0), f0, inner(x₀, g0, η₀), x₀, f0, g0, η₀)
+    df₀ = inner(x₀, g₀, η₀)
+    if df₀ >= zero(df₀)
+        error("linesearch was not given a descent direction!")
+    end
+    p₀ = LineSearchPoint(zero(f₀), f₀, df₀, x₀, f₀, g₀, η₀)
     iter = HagerZhangLineSearchIterator(fg, retract, inner, p₀, η₀, initialguess, acceptfirst, ls)
     next = iterate(iter)
     @assert next !== nothing

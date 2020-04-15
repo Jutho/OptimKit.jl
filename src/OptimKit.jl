@@ -9,6 +9,8 @@ _transport!(v, xold, d, α, xnew) = v
 _scale!(v, α) = LinearAlgebra.rmul!(v, α)
 _add!(vdst, vsrc, α) = LinearAlgebra.axpy!(α, vsrc, vdst)
 
+_precondition(x, g) = g
+
 abstract type OptimizationAlgorithm
 end
 

@@ -9,8 +9,9 @@ GradientDescent(; maxiter = typemax(Int), gradtol::Real = 1e-8,
         linesearch::AbstractLineSearch = HagerZhangLineSearch(;verbosity = verbosity - 2)) =
     GradientDescent(maxiter, gradtol, linesearch, verbosity)
 
-function optimize(fg, x, alg::GradientDescent; retract = _retract, inner = _inner,
-                    transport! = _transport!, scale! = _scale!, add! = _add!,
+function optimize(fg, x, alg::GradientDescent; precondition = _precondition,
+                    retract = _retract, inner = _inner, transport! = _transport!,
+                    scale! = _scale!, add! = _add!,
                     isometrictransport = (transport! == _transport! && inner == _inner))
 
     verbosity = alg.verbosity
@@ -18,26 +19,30 @@ function optimize(fg, x, alg::GradientDescent; retract = _retract, inner = _inne
     numfg = 1
     normgrad = sqrt(inner(x, g, g))
     normgradhistory = [normgrad]
-    η = scale!(deepcopy(g), -1)
+    η = scale!(precondition(x, g), -1)
     α = 1e-2
     numiter = 0
     verbosity >= 2 &&
         @info @sprintf("GD: initializing with f = %.12f, ‖∇f‖ = %.4e", f, normgrad)
-    while numiter < alg.maxiter
-        numiter += 1
+    while true
+        # new search direction
+        η = scale!(precondition(x, deepcopy(g)), -1)
+
+        # perform line search
         x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
             initialguess = 1.1α, retract = retract, inner = inner)
         numfg += nfg
         normgrad = sqrt(inner(x, g, g))
         push!(normgradhistory, normgrad)
-        if normgrad <= alg.gradtol
+        numiter += 1
+
+        # check stopping criteria and print info
+        if normgrad <= alg.gradtol || numiter >= alg.maxiter
             break
         end
         verbosity >= 2 &&
             @info @sprintf("GD: iter %4d: f = %.12f, ‖∇f‖ = %.4e, step size = %.2e",
                             numiter, f, normgrad, α)
-        # next search direction
-        η = scale!(deepcopy(g), -1)
     end
     if verbosity > 0
         if normgrad <= alg.gradtol
