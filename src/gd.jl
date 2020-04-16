@@ -17,22 +17,32 @@ function optimize(fg, x, alg::GradientDescent; precondition = _precondition,
     verbosity = alg.verbosity
     f, g = fg(x)
     numfg = 1
-    normgrad = sqrt(inner(x, g, g))
+    innergg = inner(x, g, g)
+    normgrad = sqrt(innergg)
     normgradhistory = [normgrad]
-    η = scale!(precondition(x, g), -1)
-    α = 1e-2
+
+    # compute here once to define initial value of α in scale-invariant way
+    Pg = precondition(x, g)
+    normPg = sqrt(inner(x, Pg, Pg))
+    α = 1/(10*normPg) # initial guess: scale invariant
+
     numiter = 0
     verbosity >= 2 &&
         @info @sprintf("GD: initializing with f = %.12f, ‖∇f‖ = %.4e", f, normgrad)
     while true
-        # new search direction
-        η = scale!(precondition(x, deepcopy(g)), -1)
+        # compute new search direction
+        Pg = precondition(x, deepcopy(g))
+        η = scale!(Pg, -1) # we don't need g or Pg anymore, so we can overwrite it
 
         # perform line search
+        _xlast[] = x # store result in global variables to debug linesearch failures
+        _glast[] = g
+        _dlast[] = η
         x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
-            initialguess = 1.1α, retract = retract, inner = inner)
+            initialguess = α, retract = retract, inner = inner)
         numfg += nfg
-        normgrad = sqrt(inner(x, g, g))
+        innergg = inner(x, g, g)
+        normgrad = sqrt(innergg)
         push!(normgradhistory, normgrad)
         numiter += 1
 
@@ -43,6 +53,9 @@ function optimize(fg, x, alg::GradientDescent; precondition = _precondition,
         verbosity >= 2 &&
             @info @sprintf("GD: iter %4d: f = %.12f, ‖∇f‖ = %.4e, step size = %.2e",
                             numiter, f, normgrad, α)
+
+        # increase α for next step
+        α = (11*α)/10
     end
     if verbosity > 0
         if normgrad <= alg.gradtol

@@ -33,17 +33,26 @@ function optimize(fg, x, alg::LBFGS; precondition = _precondition,
 
     while true
         # compute new search direction
-        Hg = let x = x
-            H(g, ξ->precondition(x, ξ), (ξ1, ξ2)->inner(x, ξ1, ξ2), add!, scale!)
+        if length(H) > 0
+            Hg = let x = x
+                H(g, ξ->precondition(x, ξ), (ξ1, ξ2)->inner(x, ξ1, ξ2), add!, scale!)
+            end
+            η = scale!(Hg, -1)
+        else
+            Pg = precondition(x, deepcopy(g))
+            normPg = sqrt(inner(x, Pg, Pg))
+            η = scale!(Pg, -1/normPg)
         end
-        η = scale!(Hg, -1)
 
         # store current quantities as previous quantities
         xprev = x
         gprev = g
         ηprev = η
 
-        # do line search to find new quantities
+        # perform line search
+        _xlast[] = x # store result in global variables to debug linesearch failures
+        _glast[] = g
+        _dlast[] = η
         x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
             initialguess = 1., acceptfirst = true, retract = retract, inner = inner)
         numfg += nfg
@@ -62,13 +71,13 @@ function optimize(fg, x, alg::LBFGS; precondition = _precondition,
 
         # transport gprev, ηprev and vectors in Hessian approximation to x
         gprev = transport!(gprev, xprev, ηprev, α, x)
-        ηprev = transport!(deepcopy(ηprev), xprev, ηprev, α, x)
         for k = 1:length(H)
             @inbounds s, y, ρ = H[k]
             s = transport!(s, xprev, ηprev, α, x)
             y = transport!(y, xprev, ηprev, α, x)
             H[k] = (s, y, ρ)
         end
+        ηprev = transport!(deepcopy(ηprev), xprev, ηprev, α, x)
 
         if isometrictransport
             # TRICK TO ENSURE LOCKING CONDITION IN THE CONTEXT OF LBFGS
@@ -90,7 +99,6 @@ function optimize(fg, x, alg::LBFGS; precondition = _precondition,
             # apply Householder transforms to gprev, ηprev and vectors in H
             gprev = add!(gprev, ν₁, -2*inner(x, ν₁, gprev)/squarednormν₁)
             gprev = add!(gprev, ν₂, -2*inner(x, ν₂, gprev)/squarednormν₂)
-            ηprev = ξ₂
             for k = 1:length(H)
                 @inbounds s, y, ρ = H[k]
                 s = add!(s, ν₁, -2*inner(x, ν₁, s)/squarednormν₁)
@@ -99,6 +107,7 @@ function optimize(fg, x, alg::LBFGS; precondition = _precondition,
                 y = add!(y, ν₂, -2*inner(x, ν₂, y)/squarednormν₂)
                 H[k] = (s, y, ρ)
             end
+            ηprev = ξ₂
         else
             # use cautious update below; see "A Riemannian BFGS Method without
             # Differentiated Retraction for Nonconvex Optimization Problems"
@@ -112,10 +121,9 @@ function optimize(fg, x, alg::LBFGS; precondition = _precondition,
         innerss = inner(x, s, s)
 
         if innersy/innerss > 1e-4*normgrad
-            ρ = 1/innersy
-            push!(H, (s, y, ρ))
-        else
-            @warn "non-positivite gₓ(s,y): not updating inverse Hessian approximation" innersy
+            norms = sqrt(innerss)
+            ρ = innerss/innersy
+            push!(H, (scale!(s, 1/norms), scale!(y, 1/norms), ρ))
         end
     end
     if verbosity > 0
@@ -200,7 +208,6 @@ end
 end
 
 function (H::LBFGSInverseHessian)(g, precondition, inner, add!, scale!; α = H.α)
-    length(H) == 0 && return precondition(deepcopy(g))
     q = deepcopy(g)
     for k = length(H):-1:1
         s, y, ρ = H[k]
@@ -208,7 +215,7 @@ function (H::LBFGSInverseHessian)(g, precondition, inner, add!, scale!; α = H.�
         q = add!(q, y, -α[k])
     end
     s, y, ρ = H[length(H)]
-    γ = inner(s,y)/inner(y,y)
+    γ = inner(s, y)/inner(y, precondition(y))
     z = scale!(precondition(q), γ)
     for k = 1:length(H)
         s, y, ρ = H[k]

@@ -14,83 +14,80 @@ ConjugateGradient(; flavor = HagerZhang(), maxiter = typemax(Int), gradtol::Real
         linesearch::AbstractLineSearch = HagerZhangLineSearch(;verbosity = verbosity - 2)) =
     ConjugateGradient(flavor, maxiter, gradtol, linesearch, restart, verbosity)
 
-function optimize(fg, x, alg::ConjugateGradient; retract = _retract, inner = _inner,
-                    transport! = _transport!, scale! = _scale!, add! = _add!,
+function optimize(fg, x, alg::ConjugateGradient; precondition = _precondition,
+                    retract = _retract, inner = _inner, transport! = _transport!,
+                    scale! = _scale!, add! = _add!,
                     isometrictransport = (transport! == _transport! && inner == _inner))
 
     verbosity = alg.verbosity
     f, g = fg(x)
     numfg = 1
-    normgrad = sqrt(inner(x, g, g))
+    innergg = inner(x, g, g)
+    normgrad = sqrt(innergg)
     normgradhistory = [normgrad]
-    η = scale!(deepcopy(g), -1)
-    α = 1e-2
+
+    # compute here once to define initial value of α in scale-invariant way
+    Pg = precondition(x, g)
+    normPg = sqrt(inner(x, Pg, Pg))
+    α = 1/(10*normPg) # initial guess: scale invariant
 
     numiter = 0
     verbosity >= 2 &&
         @info @sprintf("CG: initializing with f = %.12f, ‖∇f‖ = %.4e", f, normgrad)
-    while numiter < alg.maxiter
-        numiter += 1
-        xprev = x
-        ηprev = η
-        gprev = g
-
-        x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
-            initialguess = α, retract = retract, inner = inner)
-        normgrad = sqrt(inner(x, g, g))
-        numfg += nfg
-        push!(normgradhistory, normgrad)
-        if normgrad <= alg.gradtol
-            break
+    while true
+        # compute new search direction
+        if precondition === _precondition
+            Pg = g
+        else
+            Pg = precondition(x, deepcopy(g))
         end
-        # next search direction
-        if isometrictransport
-            # use trick from A BROYDEN CLASS OF QUASI-NEWTON METHODS FOR RIEMANNIAN OPTIMIZATION: define new isometric transport such that, applying it to transported ηprev, it returns a vector proportional to ξ but with the norm of ηprev
-            gprev = transport!(gprev, xprev, ηprev, α, x)
-            normη = sqrt(inner(xprev, ηprev, ηprev))
-            normξ = sqrt(inner(x, ξ, ξ))
-            ξ₁ = transport!(ηprev, xprev, ηprev, α, x)
-            ξ₂ = ξ
-            if ξ₁ !== ξ
-                # if ξ₁ == ξ, it also means normξ = normη, since the latter is preserved
-                ξ₂ = scale!(ξ, normη/normξ)
-                ν₁ = add!(deepcopy(ξ₁), ξ₂, +1)
-                ν₂ = scale!(deepcopy(ξ₂), -2)
-                gprev = add!(gprev, ν₁, -2*inner(x, ν₁, gprev)/inner(x, ν₁, ν₁))
-                gprev = add!(gprev, ν₂, -2*inner(x, ν₂, gprev)/inner(x, ν₂, ν₂))
-                # @show normη normξ
-                # ξ₁ = add!(ξ₁, ν₁, -2*inner(x, ν₁, ξ₁)/inner(x, ν₁, ν₁))
-                # ξ₁ = add!(ξ₁, ν₂, -2*inner(x, ν₂, ξ₁)/inner(x, ν₂, ν₂))
-                # ξ₁ = add!(ξ₁, ξ₂, -1)
-                # @show inner(x, ξ₁, ξ₁)
-            end
-            ηprev = ξ₂
-            y = add!(scale!(deepcopy(g), normξ/normη), gprev, -1)
-        else # scaled transport, make sure previous direction does not grow in norm
-            gprev = transport!(gprev, xprev, ηprev, α, x)
-            normη = sqrt(inner(xprev, ηprev, ηprev))
-            normξ = sqrt(inner(x, ξ, ξ))
-            ηprev = ξ
-            if normξ > normη
-                ηprev = scale!(ηprev, normη/normξ)
-                y = add!(scale!(deepcopy(g), normξ/normη), gprev, -1)
-            else
-                y = add!(deepcopy(g), gprev, -1)
-            end
-        end
-        β = let x = x
-            alg.flavor(g, gprev, y, ηprev, (η₁,η₂)->inner(x,η₁,η₂))
-        end
-        η = scale!(deepcopy(g), -1)
+        η = scale!(deepcopy(Pg), -1)
         if mod(numiter, alg.restart) == 0
             β = zero(β)
         else
+            β = let x = x
+                alg.flavor(g, gprev, Pg, Pgprev, ηprev, (η₁,η₂)->inner(x,η₁,η₂))
+            end
             η = add!(η, ηprev, β)
         end
 
+        # store current quantities as previous quantities
+        xprev = x
+        gprev = g
+        Pgprev = Pg
+        ηprev = η
+
+        # perform line search
+        _xlast[] = x # store result in global variables to debug linesearch failures
+        _glast[] = g
+        _dlast[] = η
+        x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
+            initialguess = α, retract = retract, inner = inner)
+        numfg += nfg
+        innergg = inner(x, g, g)
+        normgrad = sqrt(innergg)
+        push!(normgradhistory, normgrad)
+        numiter += 1
+
+        # check stopping criteria and print info
+        if normgrad <= alg.gradtol || numiter >= alg.maxiter
+            break
+        end
         verbosity >= 2 &&
             @info @sprintf("CG: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, β = %.2e",
                             numiter, f, normgrad, α, β)
+
+        # increase α for next step
+        α = (11*α)/10
+
+        # transport gprev, ηprev and vectors in Hessian approximation to x
+        gprev = transport!(gprev, xprev, ηprev, α, x)
+        if precondition === _precondition
+            Pgprev = gprev
+        else
+            Pgprev = transport!(Pgprev, xprev, ηprev, α, x)
+        end
+        ηprev = transport!(deepcopy(ηprev), xprev, ηprev, α, x)
     end
     if verbosity > 0
         if normgrad <= alg.gradtol
@@ -110,33 +107,57 @@ struct HagerZhang{T<:Real} <: CGFlavor
 end
 HagerZhang(; η::Real = 0.4, θ::Real = 1.0) = HagerZhang(promote(η, θ)...)
 
-function (HZ::HagerZhang)(g, gprev, y, dprev, inner)
-    dy = inner(dprev, y)
-    yy = inner(y, y)
-    β = (inner(y, g) - HZ.θ*yy/dy*inner(dprev, g))/dy
+function (HZ::HagerZhang)(g, gprev, Pg, Pgprev, dprev, inner)
+    dd = inner(dprev, dprev)
+    dg = inner(dprev, g)
+    dgprev = inner(dprev, gprev)
+    gPg = inner(g, Pg)
+    gprevPgprev = inner(gprev, Pgprev)
+    gPgprev = inner(g, Pgprev)
+    gprevPg = inner(gprev, Pg) # should probably be the same as gprevPg
 
-    η = HZ.η*inner(dprev, gprev)/inner(dprev, dprev)
+    dy = dg - dgprev
+    gPy = gPg - gPgprev
+    yPy = gPg + gprevPgprev - gPgprev - gprevPg
 
-    return max(β, η)
+    β = (gPy - HZ.θ*(yPy/dy)*dg)/dy
+
+    # small β truncation of "THE LIMITED MEMORY CONJUGATE GRADIENT METHOD" (2013)
+    # requires inverse preconditioner to have inner(d, P\d) in the denominator
+    # η = HZ.η*dgprev/dinvPd
+    # so instead use simplified Polak-Ribiere truncation:
+    return max(β, zero(β))
 end
 
 struct HestenesStiefel <: CGFlavor
+    pos::Bool
 end
-(::HestenesStiefel)(g, gprev, y, dprev, inner) = inner(g, y)/inner(dprev, y)
+HestenesStiefel() = HestenesStiefel(true)
+function (HS::HestenesStiefel)(g, gprev, Pg, Pgprev, dprev, inner)
+    # y = Pg - Pgprev : do not form exactly
+    β = (inner(g, Pg) - inner(g, Pgprev))/(inner(dprev, Pg) - inner(dprev, Pgprev))
+    return HS.pos ? max(zero(β), β) : β
+end
 
 struct FletcherReeves <: CGFlavor
 end
-(::FletcherReeves)(g, gprev, y, dprev, inner) = inner(g, g)/inner(gprev, gprev)
+function (::FletcherReeves)(g, gprev, Pg, Pgprev, dprev, inner)
+    return inner(g, Pg)/inner(gprev, Pgprev)
+end
 
-struct PolakRibierePolyak <: CGFlavor
+struct PolakRibiere <: CGFlavor
     pos::Bool
 end
-PolakRibierePolyak() = PolakRibierePolyak(true)
-function (PRP::PolakRibierePolyak)(g, gprev, y, dprev, inner)
-    β = inner(g, y) / inner(gprev, gprev)
-    return PRP.pos ? max(zero(β), β) : β
+PolakRibiere() = PolakRibiere(true)
+function (PR::PolakRibiere)(g, gprev, Pg, Pgprev, dprev, inner)
+    # y = Pg - Pgprev : do not form exactly
+    β = (inner(g, Pg) - inner(g, Pgprev)) / inner(gprev, Pgprev)
+    return PR.pos ? max(zero(β), β) : β
 end
 
 struct DaiYuan <: CGFlavor
 end
-(::DaiYuan)(g, gprev, y, dprev, inner) = inner(g, g)/inner(dprev, y)
+function (::DaiYuan)(g, gprev, Pg, Pgprev, dprev, inner)
+    # y = Pg - Pgprev : do not form exactly
+    return inner(g, Pg)/(inner(dprev, Pg) - inner(dprev, Pgprev))
+end

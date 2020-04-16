@@ -14,6 +14,10 @@ _precondition(x, g) = g
 abstract type OptimizationAlgorithm
 end
 
+const _xlast = Ref{Any}()
+const _glast = Ref{Any}()
+const _dlast = Ref{Any}()
+
 """
     optimize(fg, x, algorithm; retract = _retract, inner = _inner,
                     transport! = _transport!, scale! = _scale!, add! = _add!,
