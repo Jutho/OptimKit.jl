@@ -24,7 +24,7 @@ function optimize(fg, x, alg::GradientDescent; precondition = _precondition,
     # compute here once to define initial value of α in scale-invariant way
     Pg = precondition(x, g)
     normPg = sqrt(inner(x, Pg, Pg))
-    α = 1/(10*normPg) # initial guess: scale invariant
+    α = 1/(normPg) # initial guess: scale invariant
 
     numiter = 0
     verbosity >= 2 &&
@@ -55,7 +55,7 @@ function optimize(fg, x, alg::GradientDescent; precondition = _precondition,
                             numiter, f, normgrad, α)
 
         # increase α for next step
-        α = (11*α)/10
+        α = 2*α
     end
     if verbosity > 0
         if normgrad <= alg.gradtol

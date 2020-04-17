@@ -2,13 +2,14 @@ struct LBFGS{T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
     m::Int
     maxiter::Int
     gradtol::T
+    acceptfirst::Bool
     linesearch::L
     verbosity::Int
 end
-LBFGS(m::Int = 8; maxiter = typemax(Int), gradtol::Real = 1e-8,
+LBFGS(m::Int = 8; maxiter = typemax(Int), gradtol::Real = 1e-8, acceptfirst::Bool = true
         verbosity::Int = 0,
         linesearch::AbstractLineSearch = HagerZhangLineSearch(;verbosity = verbosity - 2)) =
-    LBFGS(m, maxiter, gradtol, linesearch, verbosity)
+    LBFGS(m, maxiter, gradtol, acceptfirst, linesearch, verbosity)
 
 function optimize(fg, x, alg::LBFGS; precondition = _precondition,
                     retract = _retract, inner = _inner, transport! = _transport!,
@@ -41,7 +42,7 @@ function optimize(fg, x, alg::LBFGS; precondition = _precondition,
         else
             Pg = precondition(x, deepcopy(g))
             normPg = sqrt(inner(x, Pg, Pg))
-            η = scale!(Pg, -1/normPg)
+            η = scale!(Pg, -1/normPg) # initial guess: scale invariant
         end
 
         # store current quantities as previous quantities
@@ -54,7 +55,9 @@ function optimize(fg, x, alg::LBFGS; precondition = _precondition,
         _glast[] = g
         _dlast[] = η
         x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
-            initialguess = 1., acceptfirst = true, retract = retract, inner = inner)
+            initialguess = 2., acceptfirst = alg.acceptfirst,
+            # for some reason, line search seems to converge to solution alpha = 2 in most cases if acceptfirst = false. If acceptfirst = true, the initial value of alpha can immediately be accepted. This typically leads to a more erratic convergence of normgrad, but to less function evaluations in the end.
+            retract = retract, inner = inner)
         numfg += nfg
         innergg = inner(x, g, g)
         normgrad = sqrt(innergg)
@@ -66,8 +69,8 @@ function optimize(fg, x, alg::LBFGS; precondition = _precondition,
             break
         end
         verbosity >= 2 &&
-            @info @sprintf("LBFGS: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, m = %d",
-                            numiter, f, normgrad, α, length(H))
+            @info @sprintf("LBFGS: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, m = %d, nfg = %d",
+                            numiter, f, normgrad, α, length(H), nfg)
 
         # transport gprev, ηprev and vectors in Hessian approximation to x
         gprev = transport!(gprev, xprev, ηprev, α, x)

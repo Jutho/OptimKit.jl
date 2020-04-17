@@ -10,7 +10,7 @@ struct ConjugateGradient{F<:CGFlavor,T<:Real,L<:AbstractLineSearch} <: Optimizat
     verbosity::Int
 end
 ConjugateGradient(; flavor = HagerZhang(), maxiter = typemax(Int), gradtol::Real = 1e-8,
-        restart = 50, verbosity::Int = 0,
+        restart = typemax(Int), verbosity::Int = 0,
         linesearch::AbstractLineSearch = HagerZhangLineSearch(;verbosity = verbosity - 2)) =
     ConjugateGradient(flavor, maxiter, gradtol, linesearch, restart, verbosity)
 
@@ -29,11 +29,13 @@ function optimize(fg, x, alg::ConjugateGradient; precondition = _precondition,
     # compute here once to define initial value of α in scale-invariant way
     Pg = precondition(x, g)
     normPg = sqrt(inner(x, Pg, Pg))
-    α = 1/(10*normPg) # initial guess: scale invariant
+    α = 1/(normPg) # initial guess: scale invariant
+    # α = one(normgrad)
 
     numiter = 0
     verbosity >= 2 &&
         @info @sprintf("CG: initializing with f = %.12f, ‖∇f‖ = %.4e", f, normgrad)
+    local xprev, gprev, Pgprev, ηprev
     while true
         # compute new search direction
         if precondition === _precondition
@@ -43,11 +45,11 @@ function optimize(fg, x, alg::ConjugateGradient; precondition = _precondition,
         end
         η = scale!(deepcopy(Pg), -1)
         if mod(numiter, alg.restart) == 0
-            β = zero(β)
+            β = zero(α)
         else
-            β = let x = x
+            β = oftype(α, let x = x
                 alg.flavor(g, gprev, Pg, Pgprev, ηprev, (η₁,η₂)->inner(x,η₁,η₂))
-            end
+            end)
             η = add!(η, ηprev, β)
         end
 
@@ -74,11 +76,11 @@ function optimize(fg, x, alg::ConjugateGradient; precondition = _precondition,
             break
         end
         verbosity >= 2 &&
-            @info @sprintf("CG: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, β = %.2e",
-                            numiter, f, normgrad, α, β)
+            @info @sprintf("CG: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, β = %.2e, nfg = %d",
+                            numiter, f, normgrad, α, β, nfg)
 
         # increase α for next step
-        α = (11*α)/10
+        α = 2*α
 
         # transport gprev, ηprev and vectors in Hessian approximation to x
         gprev = transport!(gprev, xprev, ηprev, α, x)
@@ -126,7 +128,12 @@ function (HZ::HagerZhang)(g, gprev, Pg, Pgprev, dprev, inner)
     # requires inverse preconditioner to have inner(d, P\d) in the denominator
     # η = HZ.η*dgprev/dinvPd
     # so instead use simplified Polak-Ribiere truncation:
-    return max(β, zero(β))
+    # return max(β, zero(β))
+    η = HZ.η*dgprev/dd
+    if β < η
+        @warn "resorting to η"
+    end
+    return max(β, η)
 end
 
 struct HestenesStiefel <: CGFlavor

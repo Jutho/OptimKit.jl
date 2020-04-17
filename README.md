@@ -16,10 +16,12 @@ All of them take a number of parameters, namely
 *   `linesearch`: which linesearch algorithm to be used, currently there is only one choice, namely `HagerZhangLineSearch(;...)` (see below).
 *   `verbosity`: Verbosity level, the amount of information that will be printed, either `<=0` (default value) for no information, `1` for a single STDOUT output at the end of the algorithm, or `>=2` for a one-line summary after every iteration step.
 
-Furthermore, `LBFGS` takes a single positional argument `m::Int`, the number of previous steps to take into account in the construction of the approximate (inverse) Hessian. `ConjugateGradient` has an additional keyword argument, `flavor`, which can be any of the following:
+Furthermore, `LBFGS` takes a single positional argument `m::Int`, the number of previous steps to take into account in the construction of the approximate (inverse) Hessian. It also takes a keyword argument `acceptfirst`, which determines whether the first guess for `alpha` in the line search can be accepted. The default value is `true`, which typically leads to less function evaluations (otherwise at least two function evaluations per iteration are required), despite a more erratic convergence of the gradient norm.
+
+`ConjugateGradient` also has one additional keyword argument, `flavor`, which can be any of the following:
 *   `HagerZhang(; η::Real = 0.4, θ::Real = 1.0)`: default
 *   `HestenesStiefel()`
-*   `PolakRibierePolyak()`
+*   `PolakRibiere()`
 *   `DaiYuan()`
 
 The `linesearch` argument currently takes the value
@@ -63,4 +65,4 @@ Finally, there is one keyword argument `isometrictransport::Bool` to indicate wh
 inner(x, ξ1, ξ2) == inner(retract(x, η, α), transport!(ξ1, x, η, α), transport!(ξ2, x, η, α))
 ```
 The default value is false, unless the default transport (`_transport!`) and inner product (`_inner`) are used. However, convergence of conjugate gradient and LBFGS is more robust (or theoretically proven) in the case of isometric transport. Note that isometric transport might not be the same as retraction transport, and thus, in particular
-``ξ != transport(η, x, η, α, x′)``. However, when isometric transport is provided, we complement it with an isometric rotation such that ``ξ = D Rₓ₀(α * η)[η]`` and ``transport(η, x, η, α)`` are parallel. This is the so-called locking condition of [Huang, Gallivan and Absil](https://doi.org/10.1137/140955483), and the approach is described in section 4.1.
+``ξ != transport(η, x, η, α, x′)``. However, when isometric transport is provided, we complement it with an isometric rotation such that ``ξ = D Rₓ₀(α * η)[η]`` and ``transport(η, x, η, α)`` are parallel in the case of `LBFGS`. This is the so-called locking condition of [Huang, Gallivan and Absil](https://doi.org/10.1137/140955483), and the approach is described in section 4.1.
