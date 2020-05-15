@@ -60,11 +60,11 @@ function optimize(fg, x, alg::LBFGS;
             # for some reason, line search seems to converge to solution alpha = 2 in most cases if acceptfirst = false. If acceptfirst = true, the initial value of alpha can immediately be accepted. This typically leads to a more erratic convergence of normgrad, but to less function evaluations in the end.
             retract = retract, inner = inner)
         numfg += nfg
-        x, f, g = finalize!(x, f, g)
+        numiter += 1
+        x, f, g = finalize!(x, f, g, numiter)
         innergg = inner(x, g, g)
         normgrad = sqrt(innergg)
         push!(normgradhistory, normgrad)
-        numiter += 1
 
         # check stopping criteria and print info
         if normgrad <= alg.gradtol || numiter >= alg.maxiter

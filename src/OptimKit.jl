@@ -10,7 +10,7 @@ _scale!(v, α) = LinearAlgebra.rmul!(v, α)
 _add!(vdst, vsrc, α) = LinearAlgebra.axpy!(α, vsrc, vdst)
 
 _precondition(x, g) = g
-_finalize!(x, f, g) = x, f, g
+_finalize!(x, f, g, numiter) = x, f, g
 
 abstract type OptimizationAlgorithm
 end

@@ -67,11 +67,11 @@ function optimize(fg, x, alg::ConjugateGradient;
         x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
             initialguess = α, retract = retract, inner = inner)
         numfg += nfg
-        x, f, g = finalize!(x, f, g)
+        numiter += 1
+        x, f, g = finalize!(x, f, g, numiter)
         innergg = inner(x, g, g)
         normgrad = sqrt(innergg)
         push!(normgradhistory, normgrad)
-        numiter += 1
 
         # check stopping criteria and print info
         if normgrad <= alg.gradtol || numiter >= alg.maxiter
