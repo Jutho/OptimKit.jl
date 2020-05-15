@@ -9,7 +9,8 @@ GradientDescent(; maxiter = typemax(Int), gradtol::Real = 1e-8,
         linesearch::AbstractLineSearch = HagerZhangLineSearch(;verbosity = verbosity - 2)) =
     GradientDescent(maxiter, gradtol, linesearch, verbosity)
 
-function optimize(fg, x, alg::GradientDescent; precondition = _precondition,
+function optimize(fg, x, alg::GradientDescent;
+                    precondition = _precondition, finalize! = _finalize!,
                     retract = _retract, inner = _inner, transport! = _transport!,
                     scale! = _scale!, add! = _add!,
                     isometrictransport = (transport! == _transport! && inner == _inner))
@@ -41,6 +42,7 @@ function optimize(fg, x, alg::GradientDescent; precondition = _precondition,
         x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
             initialguess = α, retract = retract, inner = inner)
         numfg += nfg
+        x, f, g = finalize!(x, f, g)
         innergg = inner(x, g, g)
         normgrad = sqrt(innergg)
         push!(normgradhistory, normgrad)

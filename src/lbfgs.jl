@@ -11,7 +11,8 @@ LBFGS(m::Int = 8; maxiter = typemax(Int), gradtol::Real = 1e-8, acceptfirst::Boo
         linesearch::AbstractLineSearch = HagerZhangLineSearch(;verbosity = verbosity - 2)) =
     LBFGS(m, maxiter, gradtol, acceptfirst, linesearch, verbosity)
 
-function optimize(fg, x, alg::LBFGS; precondition = _precondition,
+function optimize(fg, x, alg::LBFGS;
+                    precondition = _precondition, finalize! = _finalize!,
                     retract = _retract, inner = _inner, transport! = _transport!,
                     scale! = _scale!, add! = _add!,
                     isometrictransport = (transport! == _transport! && inner == _inner))
@@ -59,6 +60,7 @@ function optimize(fg, x, alg::LBFGS; precondition = _precondition,
             # for some reason, line search seems to converge to solution alpha = 2 in most cases if acceptfirst = false. If acceptfirst = true, the initial value of alpha can immediately be accepted. This typically leads to a more erratic convergence of normgrad, but to less function evaluations in the end.
             retract = retract, inner = inner)
         numfg += nfg
+        x, f, g = finalize!(x, f, g)
         innergg = inner(x, g, g)
         normgrad = sqrt(innergg)
         push!(normgradhistory, normgrad)

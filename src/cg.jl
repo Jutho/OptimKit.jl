@@ -14,7 +14,8 @@ ConjugateGradient(; flavor = HagerZhang(), maxiter = typemax(Int), gradtol::Real
         linesearch::AbstractLineSearch = HagerZhangLineSearch(;verbosity = verbosity - 2)) =
     ConjugateGradient(flavor, maxiter, gradtol, linesearch, restart, verbosity)
 
-function optimize(fg, x, alg::ConjugateGradient; precondition = _precondition,
+function optimize(fg, x, alg::ConjugateGradient;
+                    precondition = _precondition, finalize! = _finalize!,
                     retract = _retract, inner = _inner, transport! = _transport!,
                     scale! = _scale!, add! = _add!,
                     isometrictransport = (transport! == _transport! && inner == _inner))
@@ -66,6 +67,7 @@ function optimize(fg, x, alg::ConjugateGradient; precondition = _precondition,
         x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
             initialguess = α, retract = retract, inner = inner)
         numfg += nfg
+        x, f, g = finalize!(x, f, g)
         innergg = inner(x, g, g)
         normgrad = sqrt(innergg)
         push!(normgradhistory, normgrad)
