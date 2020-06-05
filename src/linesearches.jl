@@ -182,6 +182,9 @@ function Base.iterate(iter::HagerZhangLineSearchIterator)
     numfg += 1 # from takestep few lines above
     if a.α == b.α
         return (a.x, a.f, a.∇f, a.ξ, a.α, a.dϕ), (a, b, numfg, true)
+    elseif (b.α - a.α) < eps(one(a.α))
+        @warn "Linesearch bracket converged to a point without satisfying Wolfe conditions?"
+        return (a.x, a.f, a.∇f, a.ξ, a.α, a.dϕ), (a, b, numfg, true)
     else
         return (a.x, a.f, a.∇f, a.ξ, a.α, a.dϕ), (a, b, numfg, false)
     end
@@ -225,6 +228,9 @@ function Base.iterate(iter::HagerZhangLineSearchIterator, state::Tuple{LineSearc
         numfg += nfg
     end
     if a.α == b.α
+        return (a.x, a.f, a.∇f, a.ξ, a.α, a.dϕ), (a, b, numfg, true)
+    elseif (b.α - a.α) < eps(one(a.α))
+        @warn "Linesearch bracket converged to a point without satisfying Wolfe conditions?"
         return (a.x, a.f, a.∇f, a.ξ, a.α, a.dϕ), (a, b, numfg, true)
     else
         return (a.x, a.f, a.∇f, a.ξ, a.α, a.dϕ), (a, b, numfg, false)
