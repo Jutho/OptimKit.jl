@@ -6,7 +6,7 @@ using LinearAlgebra
 @testset "Linesearch" begin
     for (fg, x₀) in [(x->(sin(x) + x^4, cos(x) + 4*x^3), 0.),
                         (x->(x^2, 2*x), 1.),
-                        (x->(exp(x)-x^3, exp(x)-3*x^2), 2.),
+                        (x->(exp(x)-x^3, exp(x)-3*x^2), 3.9), # should trigger bisection
                         (x->(sum(x.^2), 2*x), [1.,2.]),
                         (x->(2*x[1]^2 + x[2]^4 - x[3]^2 + x[3]^4, [4*x[1], 4*x[2]^3, -2*x[3]+4*x[3]^3]), [1.,2.,3.])]
         f₀, g₀ = fg(x₀)
@@ -14,7 +14,7 @@ using LinearAlgebra
             global c₁ = 0.5*rand()
             global c₂ = 0.5 + 0.5*rand()
 
-            ls = HagerZhangLineSearch(; c₁ = c₁, c₂ = c₂, ϵ = 0, ρ = 1.5)
+            ls = HagerZhangLineSearch(; c₁ = c₁, c₂ = c₂, ϵ = 0, ρ = 1.5, verbosity = 4)
             x, f, g, ξ, α, numfg = ls(fg, x₀, -g₀)
 
             @test f ≈ fg(x)[1]
@@ -30,9 +30,19 @@ using LinearAlgebra
             @test ξ == -g₀
             @test dot(ξ,g) >= c₂*dot(ξ,g₀)
             @test f <= f₀ + α * c₁ * dot(ξ, g₀) || (2*c₁ - 1)*dot(ξ,g₀) > dot(ξ,g)
+
+            x, f, g, ξ, α, numfg = ls(fg, x₀, -g₀; initialguess = 1e4) # test infinities
+
+            @test f ≈ fg(x)[1]
+            @test g ≈ fg(x)[2]
+            @test ξ == -g₀
+            @test dot(ξ,g) >= c₂*dot(ξ,g₀)
+            @test f <= f₀ + α * c₁ * dot(ξ, g₀) || (2*c₁ - 1)*dot(ξ,g₀) > dot(ξ,g)
         end
     end
 end
+
+
 
 
 
