@@ -6,6 +6,7 @@ using LinearAlgebra
 @testset "Linesearch" for (fg, x₀) in [(x->(sin(x) + x^4, cos(x) + 4*x^3), 0.),
                         (x->(x^2, 2*x), 1.),
                         (x->(exp(x)-x^3, exp(x)-3*x^2), 3.9), # should trigger bisection
+                        (x->(exp(x)-x^3, exp(x)-3*x^2), 2), # should trigger infinities
                         (x->(sum(x.^2), 2*x), [1.,2.]),
                         (x->(2*x[1]^2 + x[2]^4 - x[3]^2 + x[3]^4, [4*x[1], 4*x[2]^3, -2*x[3]+4*x[3]^3]), [1.,2.,3.])]
     f₀, g₀ = fg(x₀)
