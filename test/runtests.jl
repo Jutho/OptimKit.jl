@@ -41,52 +41,38 @@ using LinearAlgebra
     end
 end
 
+function quadraticproblem(B, y)
+    function fg(x)
+        g = B*(x-y)
+        f = dot(x-y, g)/2
+        return f, g
+    end
+    return fg
+end
 
+algorithms = (GradientDescent, ConjugateGradient, LBFGS)
 
+@testset "Optimization Algorithm $algtype" for algtype in algorithms
+    n = 10
+    y = randn(n)
+    A = randn(n, n)
+    fg = quadraticproblem(A'*A, y)
+    x₀ = randn(n)
+    alg = algtype(; verbosity = 2, gradtol = 1e-12)
+    x, f, g, numfg, normgradhistory = optimize(fg, x₀, alg)
+    @test x ≈ y
+    @test f < 1e-14
 
-
-
-
-
-# const n = 100
-#
-# algorithms = (GradientDescent, ConjugateGradient, LBFGS)
-#
-# function problem1(B, y)
-#     function fg(x)
-#         g = B*(x-y)
-#         f = dot(x-y, g)/2
-#         return f, g
-#     end
-#     return fg
-# end
-#
-# function rescaleproblem(fg, λ, μ)
-#     return function (x)
-#         f, g = fg(x/μ)
-#         λ*f, λ*g/μ
-#     end
-# end
-#
-#
-# @testset for algtype in algorithms
-#     y = randn(n)
-#     A = randn(n, n)
-#     fg = problem1(A'*A, y)
-#     x₀ = randn(n)
-#     alg = algtype()
-#     x, f, g, numfg, normgradhistory = optimize(fg, x₀, alg)
-#
-#     λ = 4*rand()
-#     μ = 1
-#     fg2 = rescaleproblem(fg, λ, μ)
-#     alg2 = algtype(; gradtol = alg.gradtol*λ/μ)
-#     x2, f2, g2, numfg2, normgradhistory2 = optimize(fg2, μ*x₀, alg2)
-#
-#     @test abs(numfg - numfg2) <= 5
-#     numiter = length(normgradhistory)
-#     numiter2 = length(normgradhistory2)
-#     @test abs(numiter - numiter2) <= 2
-#     k = min(length(normgradhistory), length(normgradhistory2), n)
-#     @test (λ/μ)*normgradhistory[1:k] ≈ normgradhistory2[1:k]
-# end
+    n = 1000
+    y = randn(n)
+    U, S, V = svd(randn(n,n))
+    smax = maximum(S)
+    A = U * Diagonal(1 .+ S ./ smax ) * U'
+    # well conditioned, all eigenvalues between 1 and 2
+    fg = quadraticproblem(A'*A, y)
+    x₀ = randn(n)
+    alg = algtype(; verbosity = 2, gradtol = 1e-8)
+    x, f, g, numfg, normgradhistory = optimize(fg, x₀, alg)
+    @test x ≈ y rtol=1e-7
+    @test f < 1e-14
+end
