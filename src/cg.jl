@@ -25,6 +25,7 @@ function optimize(fg, x, alg::ConjugateGradient;
     numfg = 1
     innergg = inner(x, g, g)
     normgrad = sqrt(innergg)
+    fhistory = [f]
     normgradhistory = [normgrad]
 
     # compute here once to define initial value of α in scale-invariant way
@@ -71,6 +72,7 @@ function optimize(fg, x, alg::ConjugateGradient;
         x, f, g = finalize!(x, f, g, numiter)
         innergg = inner(x, g, g)
         normgrad = sqrt(innergg)
+        push!(fhistory, f)
         push!(normgradhistory, normgrad)
 
         # check stopping criteria and print info
@@ -102,7 +104,8 @@ function optimize(fg, x, alg::ConjugateGradient;
                             f, normgrad)
         end
     end
-    return x, f, g, numfg, normgradhistory
+    history = [fhistory normgradhistory]
+    return x, f, g, numfg, history
 end
 
 struct HagerZhang{T<:Real} <: CGFlavor

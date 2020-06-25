@@ -20,6 +20,7 @@ function optimize(fg, x, alg::GradientDescent;
     numfg = 1
     innergg = inner(x, g, g)
     normgrad = sqrt(innergg)
+    fhistory = [f]
     normgradhistory = [normgrad]
 
     # compute here once to define initial value of α in scale-invariant way
@@ -46,6 +47,7 @@ function optimize(fg, x, alg::GradientDescent;
         x, f, g = finalize!(x, f, g, numiter)
         innergg = inner(x, g, g)
         normgrad = sqrt(innergg)
+        push!(fhistory, f)
         push!(normgradhistory, normgrad)
 
         # check stopping criteria and print info
@@ -53,8 +55,8 @@ function optimize(fg, x, alg::GradientDescent;
             break
         end
         verbosity >= 2 &&
-            @info @sprintf("GD: iter %4d: f = %.12f, ‖∇f‖ = %.4e, step size = %.2e",
-                            numiter, f, normgrad, α)
+            @info @sprintf("GD: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, nfg = %d",
+                            numiter, f, normgrad, α, nfg)
 
         # increase α for next step
         α = 2*α
@@ -68,5 +70,6 @@ function optimize(fg, x, alg::GradientDescent;
                             f, normgrad)
         end
     end
-    return x, f, g, numfg, normgradhistory
+    history = [fhistory normgradhistory]
+    return x, f, g, numfg, history
 end
