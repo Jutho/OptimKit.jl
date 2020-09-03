@@ -83,9 +83,6 @@ function optimize(fg, x, alg::ConjugateGradient;
             @info @sprintf("CG: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, β = %.2e, nfg = %d",
                             numiter, f, normgrad, α, β, nfg)
 
-        # increase α for next step
-        α = 2*α
-
         # transport gprev, ηprev and vectors in Hessian approximation to x
         gprev = transport!(gprev, xprev, ηprev, α, x)
         if precondition === _precondition
@@ -94,6 +91,9 @@ function optimize(fg, x, alg::ConjugateGradient;
             Pgprev = transport!(Pgprev, xprev, ηprev, α, x)
         end
         ηprev = transport!(deepcopy(ηprev), xprev, ηprev, α, x)
+
+        # increase α for next step
+        α = 2*α
     end
     if verbosity > 0
         if normgrad <= alg.gradtol
