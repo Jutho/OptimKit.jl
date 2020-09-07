@@ -112,7 +112,7 @@ struct HagerZhang{T<:Real} <: CGFlavor
     η::T
     θ::T
 end
-HagerZhang(; η::Real = 0.4, θ::Real = 1.0) = HagerZhang(promote(η, θ)...)
+HagerZhang(; η::Real = 4//10, θ::Real = 1//1) = HagerZhang(promote(η, θ)...)
 
 function (HZ::HagerZhang)(g, gprev, Pg, Pgprev, dprev, inner)
     dd = inner(dprev, dprev)

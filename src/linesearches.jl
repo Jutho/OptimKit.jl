@@ -31,15 +31,15 @@ struct HagerZhangLineSearch{T<:Real} <: AbstractLineSearch
 end
 
 
-struct HagerZhangLineSearchIterator{T<:Real,F₁,F₂,F₃,X,G}
+struct HagerZhangLineSearchIterator{T₁<:Real,F₁,F₂,F₃,X,G,T₂<:Real}
     fdf::F₁ # computes function value and gradient for a given x, i.e. f, g, extra = f(x, oldextra...)
     retract::F₂ # function used to step in direction η₀ with step size α, i.e. x, ξ = retract(x₀, η₀, α) where x = Rₓ₀(α*η₀) is the new position and ξ = D Rₓ₀(α*η₀)[η₀] is the derivative or tangent of x to α at the position x
     inner::F₃ # function used to compute inner product between gradient and direction, i.e. dϕ = inner(x, g, d); can depend on x (i.e. metric on a manifold)
-    p₀::LineSearchPoint{T,X,G} # initial position, containing x₀, f₀, g₀
+    p₀::LineSearchPoint{T₁,X,G} # initial position, containing x₀, f₀, g₀
     η₀::G # search direction
-    α₀::T # initial guess for step size
+    α₀::T₁ # initial guess for step size
     acceptfirst::Bool # whether or not the initial guess can be accepted (e.g. LBFGS)
-    parameters::HagerZhangLineSearch{T}
+    parameters::HagerZhangLineSearch{T₂}
 end
 
 function takestep(iter, α)
@@ -238,14 +238,14 @@ function Base.iterate(iter::HagerZhangLineSearchIterator, state::Tuple{LineSearc
     end
 end
 
-HagerZhangLineSearch(; c₁::Real = .1, c₂::Real = .9, ϵ::Real = 1e-6,
-                        θ::Real = 1/2, γ::Real = 2/3, ρ::Real = 5.,
+HagerZhangLineSearch(; c₁::Real = 1//10, c₂::Real = 9//10, ϵ::Real = 1//10^6,
+                        θ::Real = 1//2, γ::Real = 2//3, ρ::Real = 5//1,
                         maxiter = typemax(Int), verbosity::Int = 0) =
     HagerZhangLineSearch(promote(c₁, c₂, ϵ, θ, γ, ρ)..., maxiter, verbosity)
 
 function (ls::HagerZhangLineSearch)(fg, x₀, η₀, (f₀, g₀) = fg(x₀);
                     retract = _retract, inner = _inner,
-                    initialguess = 1., acceptfirst = false)
+                    initialguess = one(f₀), acceptfirst = false)
 
     df₀ = inner(x₀, g₀, η₀)
     if df₀ >= zero(df₀)

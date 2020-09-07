@@ -57,7 +57,7 @@ function optimize(fg, x, alg::LBFGS;
         _glast[] = g
         _dlast[] = η
         x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
-            initialguess = 1., acceptfirst = alg.acceptfirst,
+            initialguess = one(f), acceptfirst = alg.acceptfirst,
             # for some reason, line search seems to converge to solution alpha = 2 in most cases if acceptfirst = false. If acceptfirst = true, the initial value of alpha can immediately be accepted. This typically leads to a more erratic convergence of normgrad, but to less function evaluations in the end.
             retract = retract, inner = inner)
         numfg += nfg
@@ -127,7 +127,7 @@ function optimize(fg, x, alg::LBFGS;
         innersy = inner(x, s, y)
         innerss = inner(x, s, s)
 
-        if innersy/innerss > 1e-4*normgrad
+        if innersy/innerss > normgrad/10000
             norms = sqrt(innerss)
             ρ = innerss/innersy
             push!(H, (scale!(s, 1/norms), scale!(y, 1/norms), ρ))
