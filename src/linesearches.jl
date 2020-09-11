@@ -102,8 +102,10 @@ function bisect(iter::HagerZhangLineSearchIterator, a::LineSearchPoint, b::LineS
     fmax = p₀.f + ϵ
     numfg = 0
     while true
-        if b.α - a.α < eps()
-            @warn @sprintf("Linesearch bisection failure: [a, b] = [%.2e, %.2e], b-a = %.2e, dϕᵃ = %.2e, dϕᵇ = %.2e, (ϕᵇ - ϕᵃ)/(b-a) = %.2e", a.α, b.α, b.α - a.α, a.dϕ, b.dϕ, (b.ϕ - a.ϕ)/(b.α - a.α))
+        if b.α - a.α < eps(typeof(b.α))
+            if iter.parameters.verbosity > 0
+                @warn @sprintf("Linesearch bisection failure: [a, b] = [%.2e, %.2e], b-a = %.2e, dϕᵃ = %.2e, dϕᵇ = %.2e, (ϕᵇ - ϕᵃ)/(b-a) = %.2e", a.α, b.α, b.α - a.α, a.dϕ, b.dϕ, (b.ϕ - a.ϕ)/(b.α - a.α))
+            end
             return a, b, numfg
         end
         αc = (1 - θ) * a.α + θ * b.α
