@@ -82,6 +82,8 @@ function optimize(fg, x, alg::LBFGS;
             @inbounds s, y, ρ = H[k]
             s = transport!(s, xprev, ηprev, α, x)
             y = transport!(y, xprev, ηprev, α, x)
+            # QUESTION:
+            # Do we need to recompute ρ = inv(inner(x, s, y)) if transport is not isometric?
             H[k] = (s, y, ρ)
         end
         ηprev = transport!(deepcopy(ηprev), xprev, ηprev, α, x)
@@ -95,26 +97,27 @@ function optimize(fg, x, alg::LBFGS;
             # still has norm normη because transport is isometric
             normη = sqrt(inner(x, ηprev, ηprev))
             normξ = sqrt(inner(x, ξ, ξ))
-
             β = normη/normξ
-            ξ₁ = ηprev
-            ξ₂ = scale!(ξ, β)
-            ν₁ = add!(ξ₁, ξ₂, +1)
-            ν₂ = scale!(deepcopy(ξ₂), -2)
-            squarednormν₁ = inner(x, ν₁, ν₁)
-            squarednormν₂ = inner(x, ν₂, ν₂)
-            # apply Householder transforms to gprev, ηprev and vectors in H
-            gprev = add!(gprev, ν₁, -2*inner(x, ν₁, gprev)/squarednormν₁)
-            gprev = add!(gprev, ν₂, -2*inner(x, ν₂, gprev)/squarednormν₂)
-            for k = 1:length(H)
-                @inbounds s, y, ρ = H[k]
-                s = add!(s, ν₁, -2*inner(x, ν₁, s)/squarednormν₁)
-                s = add!(s, ν₂, -2*inner(x, ν₂, s)/squarednormν₂)
-                y = add!(y, ν₁, -2*inner(x, ν₁, y)/squarednormν₁)
-                y = add!(y, ν₂, -2*inner(x, ν₂, y)/squarednormν₂)
-                H[k] = (s, y, ρ)
+            if !(inner(x, ξ, ηprev) ≈ normξ * normη) # ξ and η are not parallel
+                ξ₁ = ηprev
+                ξ₂ = scale!(ξ, β)
+                ν₁ = add!(ξ₁, ξ₂, +1)
+                ν₂ = scale!(deepcopy(ξ₂), -2)
+                squarednormν₁ = inner(x, ν₁, ν₁)
+                squarednormν₂ = inner(x, ν₂, ν₂)
+                # apply Householder transforms to gprev, ηprev and vectors in H
+                gprev = add!(gprev, ν₁, -2*inner(x, ν₁, gprev)/squarednormν₁)
+                gprev = add!(gprev, ν₂, -2*inner(x, ν₂, gprev)/squarednormν₂)
+                for k = 1:length(H)
+                    @inbounds s, y, ρ = H[k]
+                    s = add!(s, ν₁, -2*inner(x, ν₁, s)/squarednormν₁)
+                    s = add!(s, ν₂, -2*inner(x, ν₂, s)/squarednormν₂)
+                    y = add!(y, ν₁, -2*inner(x, ν₁, y)/squarednormν₁)
+                    y = add!(y, ν₂, -2*inner(x, ν₂, y)/squarednormν₂)
+                    H[k] = (s, y, ρ)
+                end
+                ηprev = ξ₂
             end
-            ηprev = ξ₂
         else
             # use cautious update below; see "A Riemannian BFGS Method without
             # Differentiated Retraction for Nonconvex Optimization Problems"
