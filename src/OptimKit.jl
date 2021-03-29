@@ -20,11 +20,18 @@ const _glast = Ref{Any}()
 const _dlast = Ref{Any}()
 
 """
+    x, f, g, numfg, history =
     optimize(fg, x, algorithm; retract = _retract, inner = _inner,
                     transport! = _transport!, scale! = _scale!, add! = _add!,
                     isometrictransport = (transport! == _transport! && inner == _inner))
 
-Optimize (minimize) the objective function returned as the first value of `fg`, where the second value contains the gradient, starting from a point `x` and using the algorithm `algorithm`, which is an instance of `GradientDescent`, `ConjugateGradient` or `LBFGS`.
+Optimize (minimize) the objective function returned as the first value of `fg`, where the
+second value contains the gradient, starting from a point `x` and using the algorithm
+`algorithm`, which is an instance of `GradientDescent`, `ConjugateGradient` or `LBFGS`.
+
+Returns the final point `x`, the coresponding function value `f` and gradient `g`, the
+total number of calls to `fg`, and the history of the gradient norm across the different
+iterations.
 
 Check the README of this package for further details on creating an algorithm instance, as well as for the meaning of the keyword arguments and their default values.
 """

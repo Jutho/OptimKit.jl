@@ -39,7 +39,7 @@ having `verbosity=1` in the linesearch algorithm.
 
 This optimization algorithm can then be applied by calling
 ```julia
-x, fx, gx, normgradhistory = optimize(fg, x₀, algorithm; kwargs...)
+x, fx, gx, numfg, normgradhistory = optimize(fg, x₀, algorithm; kwargs...)
 ```
 Here, the optimization problem (objective function) is specified as a function `fval, gval = fg(x)` that returns both the function value and its gradient at a given point `x`. The function value `fval` is assumed to be a real number of some type `T<:Real`. Both `x` and the gradient `gval` can be of any type, including tuples and named tuples. As a user, you should then also specify the following functions via keyword arguments
 
