@@ -1,3 +1,28 @@
+"""
+    struct LBFGS{T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
+    LBFGS(m::Int = 8; maxiter = typemax(Int), gradtol::Real = 1e-8, 
+            acceptfirst::Bool = true, verbosity::Int = 0,
+            linesearch::AbstractLineSearch = HagerZhangLineSearch())
+
+
+
+
+LBFGS optimization algorithm.
+
+## Fields
+- `m::Int`: The number of previous iterations to store for the limited memory BFGS approximation.
+- `maxiter::Int`: The maximum number of iterations.
+- `gradtol::T`: The tolerance for the norm of the gradient.
+- `acceptfirst::Bool`: Whether to accept the first step of the line search.
+- `linesearch::L`: The line search algorithm to use.
+- `verbosity::Int`: The verbosity level.
+
+## Constructors
+- `LBFGS(m::Int = 8; maxiter = typemax(Int), gradtol::Real = 1e-8, acceptfirst::Bool = true,
+        verbosity::Int = 0,
+        linesearch::AbstractLineSearch = HagerZhangLineSearch())`: Construct an LBFGS object with the specified parameters.
+
+"""
 struct LBFGS{T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
     m::Int
     maxiter::Int
@@ -6,9 +31,29 @@ struct LBFGS{T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
     linesearch::L
     verbosity::Int
 end
+
+"""
+    LBFGS(m::Int = 8; maxiter = typemax(Int), gradtol::Real = 1e-8, acceptfirst::Bool = true,
+        verbosity::Int = 0,
+        linesearch::AbstractLineSearch = HagerZhangLineSearch())
+
+Construct an LBFGS object with the specified parameters.
+
+## Arguments
+- `m::Int = 8`: The number of previous iterations to store for the limited memory BFGS approximation.
+- `maxiter::Int = typemax(Int)`: The maximum number of iterations.
+- `gradtol::Real = 1e-8`: The tolerance for the norm of the gradient.
+- `acceptfirst::Bool = true`: Whether to accept the first step of the line search.
+- `verbosity::Int = 0`: The verbosity level.
+- `linesearch::AbstractLineSearch = HagerZhangLineSearch()`: The line search algorithm to use.
+
+## Returns
+- `LBFGS`: The LBFGS object.
+
+"""
 LBFGS(m::Int = 8; maxiter = typemax(Int), gradtol::Real = 1e-8, acceptfirst::Bool = true,
         verbosity::Int = 0,
-        linesearch::AbstractLineSearch = HagerZhangLineSearch(;verbosity = verbosity - 2)) =
+        linesearch::AbstractLineSearch = HagerZhangLineSearch()) =
     LBFGS(m, maxiter, gradtol, acceptfirst, linesearch, verbosity)
 
 function optimize(fg, x, alg::LBFGS;
@@ -44,7 +89,7 @@ function optimize(fg, x, alg::LBFGS;
         else
             Pg = precondition(x, deepcopy(g))
             normPg = sqrt(inner(x, Pg, Pg))
-            η = scale!(Pg, -1/normPg) # initial guess: scale invariant
+            η = scale!(Pg, -0.01/normPg) # initial guess: scale invariant
         end
 
         # store current quantities as previous quantities
@@ -59,7 +104,7 @@ function optimize(fg, x, alg::LBFGS;
         x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
             initialguess = one(f), acceptfirst = alg.acceptfirst,
             # for some reason, line search seems to converge to solution alpha = 2 in most cases if acceptfirst = false. If acceptfirst = true, the initial value of alpha can immediately be accepted. This typically leads to a more erratic convergence of normgrad, but to less function evaluations in the end.
-            retract = retract, inner = inner)
+            retract = retract, inner = inner, verbosity = verbosity - 2)
         numfg += nfg
         numiter += 1
         x, f, g = finalize!(x, f, g, numiter)

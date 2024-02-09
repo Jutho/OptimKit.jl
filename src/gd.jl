@@ -6,7 +6,7 @@ struct GradientDescent{T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
 end
 GradientDescent(; maxiter = typemax(Int), gradtol::Real = 1e-8,
         verbosity::Int = 0,
-        linesearch::AbstractLineSearch = HagerZhangLineSearch(;verbosity = verbosity - 2)) =
+        linesearch::AbstractLineSearch = HagerZhangLineSearch()) =
     GradientDescent(maxiter, gradtol, linesearch, verbosity)
 
 function optimize(fg, x, alg::GradientDescent;
@@ -41,7 +41,7 @@ function optimize(fg, x, alg::GradientDescent;
         _glast[] = g
         _dlast[] = η
         x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
-            initialguess = α, retract = retract, inner = inner)
+            initialguess = α, retract = retract, inner = inner, verbosity = verbosity - 2)
         numfg += nfg
         numiter += 1
         x, f, g = finalize!(x, f, g, numiter)
