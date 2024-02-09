@@ -14,8 +14,8 @@ using LinearAlgebra
         global c₁ = 0.5*rand()
         global c₂ = 0.5 + 0.5*rand()
 
-        ls = HagerZhangLineSearch(; c₁ = c₁, c₂ = c₂, ϵ = 0, ρ = 1.5, verbosity = 0)
-        x, f, g, ξ, α, numfg = ls(fg, x₀, -g₀)
+        ls = HagerZhangLineSearch(; c₁ = c₁, c₂ = c₂, ϵ = 0, ρ = 1.5)
+        x, f, g, ξ, α, numfg = ls(fg, x₀, -g₀; verbosity = 4)
 
         @test f ≈ fg(x)[1]
         @test g ≈ fg(x)[2]
@@ -23,7 +23,7 @@ using LinearAlgebra
         @test dot(ξ,g) >= c₂*dot(ξ,g₀)
         @test f <= f₀ + α * c₁ * dot(ξ, g₀) || (2*c₁ - 1)*dot(ξ,g₀) > dot(ξ,g)
 
-        x, f, g, ξ, α, numfg = ls(fg, x₀, -g₀; initialguess = 1e-4) # test extrapolation phase
+        x, f, g, ξ, α, numfg = ls(fg, x₀, -g₀; initialguess = 1e-4, verbosity = 2) # test extrapolation phase
 
         @test f ≈ fg(x)[1]
         @test g ≈ fg(x)[2]
@@ -31,7 +31,7 @@ using LinearAlgebra
         @test dot(ξ,g) >= c₂*dot(ξ,g₀)
         @test f <= f₀ + α * c₁ * dot(ξ, g₀) || (2*c₁ - 1)*dot(ξ,g₀) > dot(ξ,g)
 
-        x, f, g, ξ, α, numfg = ls(fg, x₀, -g₀; initialguess = 1e4) # test infinities
+        x, f, g, ξ, α, numfg = ls(fg, x₀, -g₀; initialguess = 1e4, verbosity = 0) # test infinities
 
         @test f ≈ fg(x)[1]
         @test g ≈ fg(x)[2]

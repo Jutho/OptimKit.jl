@@ -11,7 +11,7 @@ struct ConjugateGradient{F<:CGFlavor,T<:Real,L<:AbstractLineSearch} <: Optimizat
 end
 ConjugateGradient(; flavor = HagerZhang(), maxiter = typemax(Int), gradtol::Real = 1e-8,
         restart = typemax(Int), verbosity::Int = 0,
-        linesearch::AbstractLineSearch = HagerZhangLineSearch(;verbosity = verbosity - 2)) =
+        linesearch::AbstractLineSearch = HagerZhangLineSearch()) =
     ConjugateGradient(flavor, maxiter, gradtol, linesearch, restart, verbosity)
 
 function optimize(fg, x, alg::ConjugateGradient;
@@ -29,8 +29,12 @@ function optimize(fg, x, alg::ConjugateGradient;
     normgradhistory = [normgrad]
 
     # compute here once to define initial value of α in scale-invariant way
-    Pg = precondition(x, g)
-    normPg = sqrt(inner(x, Pg, Pg))
+    if precondition === _precondition
+        Pg = g
+    else
+        Pg = precondition(x, deepcopy(g))
+    end
+    normPg = sqrt(abs(inner(x, g, Pg)))
     α = 1/(normPg) # initial guess: scale invariant
     # α = one(normgrad)
 
@@ -66,7 +70,7 @@ function optimize(fg, x, alg::ConjugateGradient;
         _glast[] = g
         _dlast[] = η
         x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
-            initialguess = α, retract = retract, inner = inner)
+            initialguess = α, retract = retract, inner = inner, verbosity = verbosity - 2)
         numfg += nfg
         numiter += 1
         x, f, g = finalize!(x, f, g, numiter)
