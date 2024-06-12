@@ -12,9 +12,18 @@ _add!(vdst, vsrc, α) = LinearAlgebra.axpy!(α, vsrc, vdst)
 _precondition(x, g) = g
 _finalize!(x, f, g, numiter) = x, f, g
 
-abstract type OptimizationAlgorithm
+# print error message and return eps(x) if x is negative
+function safe_sqrt(x::Real)
+    return if x >= 0
+        sqrt(x)
+    else
+        -x < eps(x)^(3 / 4) || @error "sqrt of negative number: $x"
+        eps(x)
+    end
 end
 
+abstract type OptimizationAlgorithm
+end
 const _xlast = Ref{Any}()
 const _glast = Ref{Any}()
 const _dlast = Ref{Any}()
