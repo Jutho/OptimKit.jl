@@ -17,8 +17,9 @@ function safe_sqrt(x::Real)
     return if x >= 0
         sqrt(x)
     else
-        -x < eps(x)^(3 / 4) || @error "sqrt of negative number: $x"
-        eps(x)
+        ϵ = eps(typeof(x))
+        -x < ϵ^(3 / 4) || @error "sqrt of negative number: $x"
+        ϵ
     end
 end
 
