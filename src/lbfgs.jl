@@ -21,7 +21,7 @@ function optimize(fg, x, alg::LBFGS;
     f, g = fg(x)
     numfg = 1
     innergg = inner(x, g, g)
-    normgrad = sqrt(innergg)
+    normgrad = safe_sqrt(innergg)
     fhistory = [f]
     normgradhistory = [normgrad]
 
@@ -43,7 +43,7 @@ function optimize(fg, x, alg::LBFGS;
             η = scale!(Hg, -1)
         else
             Pg = precondition(x, deepcopy(g))
-            normPg = sqrt(inner(x, Pg, Pg))
+            normPg = safe_sqrt(inner(x, Pg, Pg))
             η = scale!(Pg, -1/normPg) # initial guess: scale invariant
         end
 
@@ -64,7 +64,7 @@ function optimize(fg, x, alg::LBFGS;
         numiter += 1
         x, f, g = finalize!(x, f, g, numiter)
         innergg = inner(x, g, g)
-        normgrad = sqrt(innergg)
+        normgrad = safe_sqrt(innergg)
         push!(fhistory, f)
         push!(normgradhistory, normgrad)
 
@@ -95,8 +95,8 @@ function optimize(fg, x, alg::LBFGS;
             # define new isometric transport such that, applying it to transported ηprev,
             # it returns a vector proportional to ξ but with the norm of ηprev
             # still has norm normη because transport is isometric
-            normη = sqrt(inner(x, ηprev, ηprev))
-            normξ = sqrt(inner(x, ξ, ξ))
+            normη = safe_sqrt(inner(x, ηprev, ηprev))
+            normξ = safe_sqrt(inner(x, ξ, ξ))
             β = normη/normξ
             if !(inner(x, ξ, ηprev) ≈ normξ * normη) # ξ and η are not parallel
                 ξ₁ = ηprev
@@ -131,7 +131,7 @@ function optimize(fg, x, alg::LBFGS;
         innerss = inner(x, s, s)
 
         if innersy/innerss > normgrad/10000
-            norms = sqrt(innerss)
+            norms = safe_sqrt(innerss)
             ρ = innerss/innersy
             push!(H, (scale!(s, 1/norms), scale!(y, 1/norms), ρ))
         end

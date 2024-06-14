@@ -24,13 +24,13 @@ function optimize(fg, x, alg::ConjugateGradient;
     f, g = fg(x)
     numfg = 1
     innergg = inner(x, g, g)
-    normgrad = sqrt(innergg)
+    normgrad = safe_sqrt(innergg)
     fhistory = [f]
     normgradhistory = [normgrad]
 
     # compute here once to define initial value of α in scale-invariant way
     Pg = precondition(x, g)
-    normPg = sqrt(inner(x, Pg, Pg))
+    normPg = safe_sqrt(inner(x, Pg, Pg))
     α = 1/(normPg) # initial guess: scale invariant
     # α = one(normgrad)
 
@@ -71,7 +71,7 @@ function optimize(fg, x, alg::ConjugateGradient;
         numiter += 1
         x, f, g = finalize!(x, f, g, numiter)
         innergg = inner(x, g, g)
-        normgrad = sqrt(innergg)
+        normgrad = safe_sqrt(innergg)
         push!(fhistory, f)
         push!(normgradhistory, normgrad)
 
