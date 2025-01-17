@@ -1,17 +1,14 @@
 abstract type CGFlavor end
 
-struct ConjugateGradient{F<:CGFlavor,T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
-    flavor::F
-    maxiter::Int
-    gradtol::T
-    linesearch::L
-    restart::Int
-    verbosity::Int
-end
-function ConjugateGradient(; flavor=HagerZhang(), maxiter=typemax(Int), gradtol::Real=1e-8,
-                           restart=typemax(Int), verbosity::Int=0,
-                           linesearch::AbstractLineSearch=HagerZhangLineSearch())
-    return ConjugateGradient(flavor, maxiter, gradtol, linesearch, restart, verbosity)
+@kwdef struct ConjugateGradient{F<:CGFlavor,T<:Real,L<:AbstractLineSearch} <:
+              OptimizationAlgorithm
+    flavor::F = HagerZhang()
+    maxiter::Int = typemax(Int)
+    gradtol::T = 1e-8
+    linesearch::L = HagerZhangLineSearch()
+    restart::Int = typemax(Int)
+    verbosity::Int = 1
+    ls_verbosity::Int = 10
 end
 
 function optimize(fg, x, alg::ConjugateGradient;
@@ -85,7 +82,7 @@ function optimize(fg, x, alg::ConjugateGradient;
         if normgrad <= alg.gradtol || numiter >= alg.maxiter
             break
         end
-        verbosity >= 2 &&
+        verbosity >= 3 &&
             @info @sprintf("CG: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, β = %.2e, nfg = %d",
                            numiter, f, normgrad, α, β, nfg)
 
@@ -101,14 +98,14 @@ function optimize(fg, x, alg::ConjugateGradient;
         # increase α for next step
         α = 2 * α
     end
-    if verbosity > 0
-        if normgrad <= alg.gradtol
+    if normgrad <= alg.gradtol
+        verbosity >= 2 &&
             @info @sprintf("CG: converged after %d iterations: f = %.12f, ‖∇f‖ = %.4e",
                            numiter, f, normgrad)
-        else
+    else
+        verbosity >= 1 &&
             @warn @sprintf("CG: not converged to requested tol: f = %.12f, ‖∇f‖ = %.4e",
                            f, normgrad)
-        end
     end
     history = [fhistory normgradhistory]
     return x, f, g, numfg, history

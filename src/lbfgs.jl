@@ -23,39 +23,15 @@ LBFGS optimization algorithm.
         linesearch::AbstractLineSearch = HagerZhangLineSearch())`: Construct an LBFGS object with the specified parameters.
 
 """
-struct LBFGS{T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
-    m::Int
-    maxiter::Int
-    gradtol::T
-    acceptfirst::Bool
-    linesearch::L
-    verbosity::Int
+@kwdef struct LBFGS{T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
+    m::Int = 8
+    maxiter::Int = typemax(Int)
+    gradtol::T = 1e-8
+    acceptfirst::Bool = true
+    linesearch::L = HagerZhangLineSearch()
+    verbosity::Int = 1
+    ls_verbosity::Int = 1
 end
-
-"""
-    LBFGS(m::Int = 8; maxiter = typemax(Int), gradtol::Real = 1e-8, acceptfirst::Bool = true,
-        verbosity::Int = 0,
-        linesearch::AbstractLineSearch = HagerZhangLineSearch())
-
-Construct an LBFGS object with the specified parameters.
-
-## Arguments
-- `m::Int = 8`: The number of previous iterations to store for the limited memory BFGS approximation.
-- `maxiter::Int = typemax(Int)`: The maximum number of iterations.
-- `gradtol::Real = 1e-8`: The tolerance for the norm of the gradient.
-- `acceptfirst::Bool = true`: Whether to accept the first step of the line search.
-- `verbosity::Int = 0`: The verbosity level.
-- `linesearch::AbstractLineSearch = HagerZhangLineSearch()`: The line search algorithm to use.
-
-## Returns
-- `LBFGS`: The LBFGS object.
-
-"""
-LBFGS(m::Int=8; maxiter=typemax(Int), gradtol::Real=1e-8, acceptfirst::Bool=true,
-verbosity::Int=0,
-linesearch::AbstractLineSearch=HagerZhangLineSearch()) = LBFGS(m, maxiter, gradtol,
-                                                               acceptfirst, linesearch,
-                                                               verbosity)
 
 function optimize(fg, x, alg::LBFGS;
                   precondition=_precondition, (finalize!)=_finalize!,
@@ -119,7 +95,7 @@ function optimize(fg, x, alg::LBFGS;
         if normgrad <= alg.gradtol || numiter >= alg.maxiter
             break
         end
-        verbosity >= 2 &&
+        verbosity >= 3 &&
             @info @sprintf("LBFGS: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, m = %d, nfg = %d",
                            numiter, f, normgrad, α, length(H), nfg)
 
@@ -183,14 +159,14 @@ function optimize(fg, x, alg::LBFGS;
             push!(H, (scale!(s, 1 / norms), scale!(y, 1 / norms), ρ))
         end
     end
-    if verbosity > 0
-        if normgrad <= alg.gradtol
+    if normgrad <= alg.gradtol
+        verbosity >= 2 &&
             @info @sprintf("LBFGS: converged after %d iterations: f = %.12f, ‖∇f‖ = %.4e",
                            numiter, f, normgrad)
-        else
+    else
+        verbosity >= 1 &&
             @warn @sprintf("LBFGS: not converged to requested tol: f = %.12f, ‖∇f‖ = %.4e",
                            f, normgrad)
-        end
     end
     history = [fhistory normgradhistory]
     return x, f, g, numfg, history
