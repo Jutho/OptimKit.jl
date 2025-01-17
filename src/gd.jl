@@ -4,17 +4,18 @@ struct GradientDescent{T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
     linesearch::L
     verbosity::Int
 end
-GradientDescent(; maxiter = typemax(Int), gradtol::Real = 1e-8,
-        verbosity::Int = 0,
-        linesearch::AbstractLineSearch = HagerZhangLineSearch()) =
-    GradientDescent(maxiter, gradtol, linesearch, verbosity)
+function GradientDescent(; maxiter=typemax(Int),
+                         gradtol::Real=1e-8,
+                         verbosity::Int=0,
+                         linesearch::AbstractLineSearch=HagerZhangLineSearch())
+    return GradientDescent(maxiter, gradtol, linesearch, verbosity)
+end
 
 function optimize(fg, x, alg::GradientDescent;
-                    precondition = _precondition, finalize! = _finalize!,
-                    retract = _retract, inner = _inner, transport! = _transport!,
-                    scale! = _scale!, add! = _add!,
-                    isometrictransport = (transport! == _transport! && inner == _inner))
-
+                  precondition=_precondition, (finalize!)=_finalize!,
+                  retract=_retract, inner=_inner, (transport!)=_transport!,
+                  (scale!)=_scale!, (add!)=_add!,
+                  isometrictransport=(transport! == _transport! && inner == _inner))
     verbosity = alg.verbosity
     f, g = fg(x)
     numfg = 1
@@ -26,7 +27,7 @@ function optimize(fg, x, alg::GradientDescent;
     # compute here once to define initial value of α in scale-invariant way
     Pg = precondition(x, g)
     normPg = sqrt(inner(x, Pg, Pg))
-    α = 1/(normPg) # initial guess: scale invariant
+    α = 1 / (normPg) # initial guess: scale invariant
 
     numiter = 0
     verbosity >= 2 &&
@@ -41,7 +42,8 @@ function optimize(fg, x, alg::GradientDescent;
         _glast[] = g
         _dlast[] = η
         x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
-            initialguess = α, retract = retract, inner = inner, verbosity = verbosity - 2)
+                                            initialguess=α, retract=retract, inner=inner,
+                                            verbosity=verbosity - 2)
         numfg += nfg
         numiter += 1
         x, f, g = finalize!(x, f, g, numiter)
@@ -56,18 +58,18 @@ function optimize(fg, x, alg::GradientDescent;
         end
         verbosity >= 2 &&
             @info @sprintf("GD: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, nfg = %d",
-                            numiter, f, normgrad, α, nfg)
+                           numiter, f, normgrad, α, nfg)
 
         # increase α for next step
-        α = 2*α
+        α = 2 * α
     end
     if verbosity > 0
         if normgrad <= alg.gradtol
             @info @sprintf("GD: converged after %d iterations: f = %.12f, ‖∇f‖ = %.4e",
-                            numiter, f, normgrad)
+                           numiter, f, normgrad)
         else
             @warn @sprintf("GD: not converged to requested tol: f = %.12f, ‖∇f‖ = %.4e",
-                            f, normgrad)
+                           f, normgrad)
         end
     end
     history = [fhistory normgradhistory]

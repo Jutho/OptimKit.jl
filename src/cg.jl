@@ -1,5 +1,4 @@
-abstract type CGFlavor
-end
+abstract type CGFlavor end
 
 struct ConjugateGradient{F<:CGFlavor,T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
     flavor::F
@@ -9,17 +8,17 @@ struct ConjugateGradient{F<:CGFlavor,T<:Real,L<:AbstractLineSearch} <: Optimizat
     restart::Int
     verbosity::Int
 end
-ConjugateGradient(; flavor = HagerZhang(), maxiter = typemax(Int), gradtol::Real = 1e-8,
-        restart = typemax(Int), verbosity::Int = 0,
-        linesearch::AbstractLineSearch = HagerZhangLineSearch()) =
-    ConjugateGradient(flavor, maxiter, gradtol, linesearch, restart, verbosity)
+function ConjugateGradient(; flavor=HagerZhang(), maxiter=typemax(Int), gradtol::Real=1e-8,
+                           restart=typemax(Int), verbosity::Int=0,
+                           linesearch::AbstractLineSearch=HagerZhangLineSearch())
+    return ConjugateGradient(flavor, maxiter, gradtol, linesearch, restart, verbosity)
+end
 
 function optimize(fg, x, alg::ConjugateGradient;
-                    precondition = _precondition, finalize! = _finalize!,
-                    retract = _retract, inner = _inner, transport! = _transport!,
-                    scale! = _scale!, add! = _add!,
-                    isometrictransport = (transport! == _transport! && inner == _inner))
-
+                  precondition=_precondition, (finalize!)=_finalize!,
+                  retract=_retract, inner=_inner, (transport!)=_transport!,
+                  (scale!)=_scale!, (add!)=_add!,
+                  isometrictransport=(transport! == _transport! && inner == _inner))
     verbosity = alg.verbosity
     f, g = fg(x)
     numfg = 1
@@ -35,7 +34,7 @@ function optimize(fg, x, alg::ConjugateGradient;
         Pg = precondition(x, deepcopy(g))
     end
     normPg = sqrt(abs(inner(x, g, Pg)))
-    α = 1/(normPg) # initial guess: scale invariant
+    α = 1 / (normPg) # initial guess: scale invariant
     # α = one(normgrad)
 
     numiter = 0
@@ -53,9 +52,11 @@ function optimize(fg, x, alg::ConjugateGradient;
         if mod(numiter, alg.restart) == 0
             β = zero(α)
         else
-            β = oftype(α, let x = x
-                alg.flavor(g, gprev, Pg, Pgprev, ηprev, (η₁,η₂)->inner(x,η₁,η₂))
-            end)
+            β = oftype(α,
+                       let x = x
+                           alg.flavor(g, gprev, Pg, Pgprev, ηprev,
+                                      (η₁, η₂) -> inner(x, η₁, η₂))
+                       end)
             η = add!(η, ηprev, β)
         end
 
@@ -70,7 +71,8 @@ function optimize(fg, x, alg::ConjugateGradient;
         _glast[] = g
         _dlast[] = η
         x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
-            initialguess = α, retract = retract, inner = inner, verbosity = verbosity - 2)
+                                            initialguess=α, retract=retract, inner=inner,
+                                            verbosity=verbosity - 2)
         numfg += nfg
         numiter += 1
         x, f, g = finalize!(x, f, g, numiter)
@@ -85,7 +87,7 @@ function optimize(fg, x, alg::ConjugateGradient;
         end
         verbosity >= 2 &&
             @info @sprintf("CG: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, β = %.2e, nfg = %d",
-                            numiter, f, normgrad, α, β, nfg)
+                           numiter, f, normgrad, α, β, nfg)
 
         # transport gprev, ηprev and vectors in Hessian approximation to x
         gprev = transport!(gprev, xprev, ηprev, α, x)
@@ -97,15 +99,15 @@ function optimize(fg, x, alg::ConjugateGradient;
         ηprev = transport!(deepcopy(ηprev), xprev, ηprev, α, x)
 
         # increase α for next step
-        α = 2*α
+        α = 2 * α
     end
     if verbosity > 0
         if normgrad <= alg.gradtol
             @info @sprintf("CG: converged after %d iterations: f = %.12f, ‖∇f‖ = %.4e",
-                            numiter, f, normgrad)
+                           numiter, f, normgrad)
         else
             @warn @sprintf("CG: not converged to requested tol: f = %.12f, ‖∇f‖ = %.4e",
-                            f, normgrad)
+                           f, normgrad)
         end
     end
     history = [fhistory normgradhistory]
@@ -116,7 +118,7 @@ struct HagerZhang{T<:Real} <: CGFlavor
     η::T
     θ::T
 end
-HagerZhang(; η::Real = 4//10, θ::Real = 1//1) = HagerZhang(promote(η, θ)...)
+HagerZhang(; η::Real=4 // 10, θ::Real=1 // 1) = HagerZhang(promote(η, θ)...)
 
 function (HZ::HagerZhang)(g, gprev, Pg, Pgprev, dprev, inner)
     dd = inner(dprev, dprev)
@@ -131,14 +133,14 @@ function (HZ::HagerZhang)(g, gprev, Pg, Pgprev, dprev, inner)
     gPy = gPg - gPgprev
     yPy = gPg + gprevPgprev - gPgprev - gprevPg
 
-    β = (gPy - HZ.θ*(yPy/dy)*dg)/dy
+    β = (gPy - HZ.θ * (yPy / dy) * dg) / dy
 
     # small β truncation of "THE LIMITED MEMORY CONJUGATE GRADIENT METHOD" (2013)
     # requires inverse preconditioner to have inner(d, P\d) in the denominator
     # η = HZ.η*dgprev/dinvPd
     # so instead use simplified Polak-Ribiere truncation:
     # return max(β, zero(β))
-    η = HZ.η*dgprev/dd
+    η = HZ.η * dgprev / dd
     if β < η
         @warn "resorting to η"
     end
@@ -151,14 +153,14 @@ end
 HestenesStiefel() = HestenesStiefel(true)
 function (HS::HestenesStiefel)(g, gprev, Pg, Pgprev, dprev, inner)
     # y = Pg - Pgprev : do not form exactly
-    β = (inner(g, Pg) - inner(g, Pgprev))/(inner(dprev, Pg) - inner(dprev, Pgprev))
+    β = (inner(g, Pg) - inner(g, Pgprev)) / (inner(dprev, Pg) - inner(dprev, Pgprev))
     return HS.pos ? max(zero(β), β) : β
 end
 
 struct FletcherReeves <: CGFlavor
 end
 function (::FletcherReeves)(g, gprev, Pg, Pgprev, dprev, inner)
-    return inner(g, Pg)/inner(gprev, Pgprev)
+    return inner(g, Pg) / inner(gprev, Pgprev)
 end
 
 struct PolakRibiere <: CGFlavor
@@ -175,5 +177,5 @@ struct DaiYuan <: CGFlavor
 end
 function (::DaiYuan)(g, gprev, Pg, Pgprev, dprev, inner)
     # y = Pg - Pgprev : do not form exactly
-    return inner(g, Pg)/(inner(dprev, Pg) - inner(dprev, Pgprev))
+    return inner(g, Pg) / (inner(dprev, Pg) - inner(dprev, Pgprev))
 end

@@ -1,6 +1,6 @@
 module OptimKit
 
-import LinearAlgebra
+using LinearAlgebra: LinearAlgebra
 using Printf
 
 _retract(x, d, α) = (x + α * d, d)
@@ -9,11 +9,10 @@ _transport!(v, xold, d, α, xnew) = v
 _scale!(v, α) = LinearAlgebra.rmul!(v, α)
 _add!(vdst, vsrc, α) = LinearAlgebra.axpy!(α, vsrc, vdst)
 
-_precondition(x, g) = g
+_precondition(x, g) = deepcopy(g)
 _finalize!(x, f, g, numiter) = x, f, g
 
-abstract type OptimizationAlgorithm
-end
+abstract type OptimizationAlgorithm end
 
 const _xlast = Ref{Any}()
 const _glast = Ref{Any}()
@@ -61,23 +60,23 @@ Test the compatibility between the computation of the gradient, the retraction a
 
 It is up to the user to check that the values in `dfs1` and `dfs2` match up to expected precision, by inspecting the numerical values or plotting them. If these values don't match, the linesearch in `optimize` cannot be expected to work.
 """
-function optimtest(fg, x, d = fg(x)[2]; alpha = -0.1:0.001:0.1, retract = _retract, inner = _inner)
+function optimtest(fg, x, d=fg(x)[2]; alpha=-0.1:0.001:0.1, retract=_retract, inner=_inner)
     f0, g0 = fg(x)
-    fs = Vector{typeof(f0)}(undef, length(alpha)-1)
+    fs = Vector{typeof(f0)}(undef, length(alpha) - 1)
     dfs1 = similar(fs, length(alpha) - 1)
     dfs2 = similar(fs, length(alpha) - 1)
-    for i = 1:length(alpha) - 1
+    for i in 1:(length(alpha) - 1)
         a1 = alpha[i]
-        a2 = alpha[i+1]
+        a2 = alpha[i + 1]
         f1, = fg(retract(x, d, a1)[1])
         f2, = fg(retract(x, d, a2)[1])
-        dfs1[i] = (f2-f1)/(a2 - a1)
-        xmid, dmid = retract(x, d, (a1+a2)/2)
+        dfs1[i] = (f2 - f1) / (a2 - a1)
+        xmid, dmid = retract(x, d, (a1 + a2) / 2)
         fmid, gmid = fg(xmid)
         fs[i] = fmid
         dfs2[i] = inner(xmid, dmid, gmid)
     end
-    alphas = collect((alpha[2:end] + alpha[1:end-1])/2)
+    alphas = collect((alpha[2:end] + alpha[1:(end - 1)]) / 2)
     return alphas, fs, dfs1, dfs2
 end
 
