@@ -2,6 +2,7 @@ module OptimKit
 
 using LinearAlgebra: LinearAlgebra
 using Printf
+using Base: @kwdef
 
 _retract(x, d, α) = (x + α * d, d)
 _inner(x, v1, v2) = v1 === v2 ? LinearAlgebra.norm(v1)^2 : LinearAlgebra.dot(v1, v2)
