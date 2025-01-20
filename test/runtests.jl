@@ -73,7 +73,7 @@ algorithms = (GradientDescent, ConjugateGradient, LBFGS)
     # well conditioned, all eigenvalues between 1 and 2
     fg = quadraticproblem(A' * A, y)
     x₀ = randn(n)
-    alg = algtype(; verbosity=2, gradtol=1e-8)
+    alg = algtype(; verbosity=3, gradtol=1e-8)
     x, f, g, numfg, normgradhistory = optimize(fg, x₀, alg)
     @test x ≈ y rtol = 1e-7
     @test f < 1e-14

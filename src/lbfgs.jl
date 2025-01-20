@@ -1,11 +1,12 @@
 """
     struct LBFGS{T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
-    LBFGS(m::Int = 8; maxiter = typemax(Int), gradtol::Real = 1e-8, 
-            acceptfirst::Bool = true, verbosity::Int = 0,
-            linesearch::AbstractLineSearch = HagerZhangLineSearch())
-
-
-
+    LBFGS(m::Int = 8; 
+          maxiter = typemax(Int),
+          gradtol::Real = 1e-8,
+          acceptfirst::Bool = true,
+          verbosity::Int = 1,
+          ls_verbosity::Int = 1,
+          linesearch::AbstractLineSearch = HagerZhangLineSearch())
 
 LBFGS optimization algorithm.
 
@@ -15,47 +16,65 @@ LBFGS optimization algorithm.
 - `gradtol::T`: The tolerance for the norm of the gradient.
 - `acceptfirst::Bool`: Whether to accept the first step of the line search.
 - `linesearch::L`: The line search algorithm to use.
-- `verbosity::Int`: The verbosity level.
+- `verbosity::Int`: The verbosity level of the optimization algorithm.
+- `ls_verbosity::Int`: The verbosity level of the line search algorithm.
 
-## Constructors
-- `LBFGS(m::Int = 8; maxiter = typemax(Int), gradtol::Real = 1e-8, acceptfirst::Bool = true,
-        verbosity::Int = 0,
-        linesearch::AbstractLineSearch = HagerZhangLineSearch())`: Construct an LBFGS object with the specified parameters.
-
+Both verbosity levels use the following scheme:
+- 0: no output
+- 1: only warnings upon non-convergence
+- 2: convergence information at the end of the algorithm
+- 3: progress information after each iteration
+- 4: more detailed information (only for the linesearch)
 """
-@kwdef struct LBFGS{T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
-    m::Int = 8
-    maxiter::Int = typemax(Int)
-    gradtol::T = 1e-8
-    acceptfirst::Bool = true
-    linesearch::L = HagerZhangLineSearch()
-    verbosity::Int = 1
-    ls_verbosity::Int = 1
+struct LBFGS{T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
+    m::Int
+    maxiter::Int
+    gradtol::T
+    acceptfirst::Bool
+    linesearch::L
+    verbosity::Int
+    ls_verbosity::Int
+end
+function LBFGS(m::Int=8;
+               maxiter::Int=typemax(Int),
+               gradtol::Real=1e-8,
+               acceptfirst::Bool=true,
+               linesearch::AbstractLineSearch=HagerZhangLineSearch(),
+               verbosity::Int=1,
+               ls_verbosity::Int=1)
+    return LBFGS(m, maxiter, gradtol, acceptfirst, linesearch, verbosity, ls_verbosity)
 end
 
 function optimize(fg, x, alg::LBFGS;
-                  precondition=_precondition, (finalize!)=_finalize!,
+                  precondition=_precondition,
+                  (finalize!)=_finalize!,
+                  shouldstop=DefaultShouldStop(alg.maxiter),
+                  hasconverged=DefaultHasConverged(alg.gradtol),
                   retract=_retract, inner=_inner, (transport!)=_transport!,
                   (scale!)=_scale!, (add!)=_add!,
                   isometrictransport=(transport! == _transport! && inner == _inner))
+    t₀ = time()
     verbosity = alg.verbosity
     f, g = fg(x)
     numfg = 1
+    numiter = 0
     innergg = inner(x, g, g)
     normgrad = sqrt(innergg)
     fhistory = [f]
     normgradhistory = [normgrad]
+    t = time() - t₀
+    _hasconverged = hasconverged(x, f, g, normgrad)
+    _shouldstop = shouldstop(x, f, g, numfg, numiter, t)
 
     TangentType = typeof(g)
     ScalarType = typeof(innergg)
     m = alg.m
     H = LBFGSInverseHessian(m, TangentType[], TangentType[], ScalarType[])
 
-    numiter = 0
     verbosity >= 2 &&
         @info @sprintf("LBFGS: initializing with f = %.12f, ‖∇f‖ = %.4e", f, normgrad)
 
-    while true
+    while !(_hasconverged || _shouldstop)
         # compute new search direction
         if length(H) > 0
             Hg = let x = x
@@ -90,14 +109,17 @@ function optimize(fg, x, alg::LBFGS;
         normgrad = sqrt(innergg)
         push!(fhistory, f)
         push!(normgradhistory, normgrad)
+        t = time() - t₀
+        _hasconverged = hasconverged(x, f, g, normgrad)
+        _shouldstop = shouldstop(x, f, g, numfg, numiter, t)
 
         # check stopping criteria and print info
-        if normgrad <= alg.gradtol || numiter >= alg.maxiter
+        if _hasconverged || _shouldstop
             break
         end
         verbosity >= 3 &&
-            @info @sprintf("LBFGS: iter %4d: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, m = %d, nfg = %d",
-                           numiter, f, normgrad, α, length(H), nfg)
+            @info @sprintf("LBFGS: iter %4d, time %7.2f s: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, m = %d, nfg = %d",
+                           numiter, t, f, normgrad, α, length(H), nfg)
 
         # transport gprev, ηprev and vectors in Hessian approximation to x
         gprev = transport!(gprev, xprev, ηprev, α, x)
@@ -159,10 +181,10 @@ function optimize(fg, x, alg::LBFGS;
             push!(H, (scale!(s, 1 / norms), scale!(y, 1 / norms), ρ))
         end
     end
-    if normgrad <= alg.gradtol
+    if _hasconverged
         verbosity >= 2 &&
-            @info @sprintf("LBFGS: converged after %d iterations: f = %.12f, ‖∇f‖ = %.4e",
-                           numiter, f, normgrad)
+            @info @sprintf("LBFGS: converged after %d iterations and time %.2f s: f = %.12f, ‖∇f‖ = %.4e",
+                           numiter, t, f, normgrad)
     else
         verbosity >= 1 &&
             @warn @sprintf("LBFGS: not converged to requested tol: f = %.12f, ‖∇f‖ = %.4e",

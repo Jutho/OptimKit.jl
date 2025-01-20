@@ -38,6 +38,7 @@ Check the README of this package for further details on creating an algorithm in
 function optimize end
 
 include("linesearches.jl")
+include("terminate.jl")
 include("gd.jl")
 include("cg.jl")
 include("lbfgs.jl")
