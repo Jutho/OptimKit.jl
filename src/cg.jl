@@ -34,8 +34,9 @@ struct ConjugateGradient{F<:CGFlavor,T<:Real,L<:AbstractLineSearch} <: Optimizat
     restart::Int
     maxiter::Int
     gradtol::T
-    linesearch::L
     verbosity::Int
+    linesearch::L
+    ls_maxiter::Int
     ls_verbosity::Int
 end
 function ConjugateGradient(;
@@ -44,10 +45,11 @@ function ConjugateGradient(;
                            maxiter::Int=typemax(Int),
                            gradtol::Real=1e-8,
                            verbosity::Int=1,
+                           ls_maxiter::Int=10,
                            ls_verbosity::Int=1,
                            linesearch::AbstractLineSearch=HagerZhangLineSearch())
-    return ConjugateGradient(flavor, restart, maxiter, gradtol, linesearch, verbosity,
-                             ls_verbosity)
+    return ConjugateGradient(flavor, restart, maxiter, gradtol, verbosity,
+                             linesearch, ls_maxiter, ls_verbosity)
 end
 
 function optimize(fg, x, alg::ConjugateGradient;
@@ -115,8 +117,10 @@ function optimize(fg, x, alg::ConjugateGradient;
         _glast[] = g
         _dlast[] = η
         x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
-                                            initialguess=α, retract=retract, inner=inner,
-                                            verbosity=verbosity - 2)
+                                            initialguess=α,
+                                            retract=retract, inner=inner,
+                                            maxiter=alg.ls_maxiter,
+                                            verbosity=alg.ls_verbosity)
         numfg += nfg
         numiter += 1
         x, f, g = finalize!(x, f, g, numiter)

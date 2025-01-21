@@ -27,17 +27,20 @@ Both verbosity levels use the following scheme:
 struct GradientDescent{T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
     maxiter::Int
     gradtol::T
-    linesearch::L
     verbosity::Int
+    linesearch::L
+    ls_maxiter::Int
     ls_verbosity::Int
 end
 function GradientDescent(;
                          maxiter::Int=typemax(Int),
                          gradtol::Real=1e-8,
-                         linesearch::AbstractLineSearch=HagerZhangLineSearch(),
                          verbosity::Int=1,
-                         ls_verbosity::Int=1)
-    return GradientDescent(maxiter, gradtol, linesearch, verbosity, ls_verbosity)
+                         ls_maxiter::Int=10,
+                         ls_verbosity::Int=1,
+                         linesearch::AbstractLineSearch=HagerZhangLineSearch())
+    return GradientDescent(maxiter, gradtol, verbosity,
+                           linesearch, ls_maxiter, ls_verbosity)
 end
 
 function optimize(fg, x, alg::GradientDescent;
@@ -79,8 +82,10 @@ function optimize(fg, x, alg::GradientDescent;
         _glast[] = g
         _dlast[] = η
         x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
-                                            initialguess=α, retract=retract, inner=inner,
-                                            verbosity=verbosity - 2)
+                                            initialguess=α,
+                                            retract=retract, inner=inner,
+                                            maxiter=alg.ls_maxiter,
+                                            verbosity=alg.ls_verbosity)
         numfg += nfg
         numiter += 1
         x, f, g = finalize!(x, f, g, numiter)

@@ -31,18 +31,21 @@ struct LBFGS{T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
     maxiter::Int
     gradtol::T
     acceptfirst::Bool
-    linesearch::L
     verbosity::Int
+    linesearch::L
+    ls_maxiter::Int
     ls_verbosity::Int
 end
 function LBFGS(m::Int=8;
                maxiter::Int=typemax(Int),
                gradtol::Real=1e-8,
                acceptfirst::Bool=true,
-               linesearch::AbstractLineSearch=HagerZhangLineSearch(),
                verbosity::Int=1,
-               ls_verbosity::Int=1)
-    return LBFGS(m, maxiter, gradtol, acceptfirst, linesearch, verbosity, ls_verbosity)
+               ls_maxiter::Int=10,
+               ls_verbosity::Int=1,
+               linesearch::AbstractLineSearch=HagerZhangLineSearch())
+    return LBFGS(m, maxiter, gradtol, acceptfirst, verbosity,
+                 linesearch, ls_maxiter, ls_verbosity)
 end
 
 function optimize(fg, x, alg::LBFGS;
@@ -101,7 +104,8 @@ function optimize(fg, x, alg::LBFGS;
                                             acceptfirst=alg.acceptfirst,
                                             # for some reason, line search seems to converge to solution alpha = 2 in most cases if acceptfirst = false. If acceptfirst = true, the initial value of alpha can immediately be accepted. This typically leads to a more erratic convergence of normgrad, but to less function evaluations in the end.
                                             retract=retract, inner=inner,
-                                            verbosity=verbosity - 2)
+                                            maxiter=alg.ls_maxiter,
+                                            verbosity=alg.ls_verbosity)
         numfg += nfg
         numiter += 1
         x, f, g = finalize!(x, f, g, numiter)
