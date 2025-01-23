@@ -30,6 +30,9 @@ struct HagerZhangLineSearch{T<:Real} <: AbstractLineSearch
     θ::T # parameter regulating the bisection step
     γ::T # parameter triggering the bisection step, namely if bracket reduction rate is slower than `γ`
     ρ::T # parameter controlling the initial bracket expansion rate
+    maxiter::Int # hard limit on the number of iterations
+    maxfg::Int # soft limit on the number of function evaluations
+    verbosity::Int # verbosity level
 end
 
 """
@@ -57,8 +60,11 @@ function HagerZhangLineSearch(; c₁::Real=1 // 10,
                               ϵ::Real=1 // 10^6,
                               θ::Real=1 // 2,
                               γ::Real=2 // 3,
-                              ρ::Real=5 // 1)
-    return HagerZhangLineSearch(promote(c₁, c₂, ϵ, θ, γ, ρ)...)
+                              ρ::Real=5 // 1,
+                              maxiter::Int=LS_MAXITER[],
+                              maxfg::Int=LS_MAXFG[],
+                              verbosity::Int=LS_VERBOSITY[])
+    return HagerZhangLineSearch(promote(c₁, c₂, ϵ, θ, γ, ρ)..., maxiter, maxfg, verbosity)
 end
 
 # implementation as function
@@ -66,7 +72,7 @@ end
     (ls::HagerZhangLineSearch)(fg, x₀, η₀, fg₀ = fg(x₀);
                     retract = _retract, inner = _inner,
                     initialguess = one(fg₀[1]), acceptfirst = false,
-                    maxiter = 50, maxfuneval = 100, verbosity = 0)
+                    maxiter = ls.maxiter, maxfg = lsmaxfg, verbosity = ls.verbosity)
 
 Perform a Hager-Zhang line search to find a step length that satisfies the (approximate) Wolfe conditions.
 
@@ -84,7 +90,7 @@ Perform a Hager-Zhang line search to find a step length that satisfies the (appr
 - `acceptfirst::Bool`: Parameter that controls whether the initial guess can be accepted if it satisfies the strong Wolfe conditions. Defaults to `false`, thus requiring 
   at least one line search iteration and one extra function evaluation.
 - `maxiter::Int`: Hard limit on the number of iterations. Default is `50`.
-- `maxfuneval::Int`: Soft limit on the number of function evaluations. Default is `100`.
+- `maxfg::Int`: Soft limit on the number of function evaluations. Default is `100`.
 - `verbosity::Int`: The verbosity level (see below). Default is `0`.
 
 ### Verbosity Levels
@@ -104,8 +110,11 @@ Perform a Hager-Zhang line search to find a step length that satisfies the (appr
 """
 function (ls::HagerZhangLineSearch)(fg, x₀, η₀, fg₀=fg(x₀);
                                     retract=_retract, inner=_inner,
-                                    initialguess::Real=one(fg₀[1]), acceptfirst::Bool=false,
-                                    maxiter::Int=50, maxfuneval::Int=100, verbosity::Int=0)
+                                    initialguess::Real=one(fg₀[1]),
+                                    acceptfirst::Bool=false,
+                                    maxiter::Int=ls.maxiter,
+                                    maxfg::Int=ls.maxfg,
+                                    verbosity::Int=ls.verbosity)
     (f₀, g₀) = fg₀
     ϕ₀ = f₀
     dϕ₀ = inner(x₀, g₀, η₀)
@@ -134,7 +143,7 @@ function (ls::HagerZhangLineSearch)(fg, x₀, η₀, fg₀=fg(x₀);
                 @info @sprintf("Linesearch converged after %d iterations and %d function evaluations:\nα = %.2e, dϕ = %.2e, ϕ - ϕ₀ = %.2e",
                                k, numfg, α, dϕ, f - ϕ₀)
             return x, f, g, ξ, α, numfg
-        elseif k == maxiter || numfg >= maxfuneval
+        elseif k >= maxiter || numfg >= maxfg
             verbosity >= 1 &&
                 @warn @sprintf("Linesearch not converged after %d iterations and %d function evaluations:\nα = %.2e, dϕ = %.2e, ϕ - ϕ₀ = %.2e",
                                k, numfg, α, dϕ, f - ϕ₀)

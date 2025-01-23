@@ -5,22 +5,27 @@ abstract type CGFlavor end
     ConjugateGradient(;
                       flavor::CGFlavor=HagerZhang(),
                       restart::Int=typemax(Int);
-                      maxiter::Int=typemax(Int),
-                      gradtol::Real=1e-8,
-                      verbosity::Int=1,
-                      ls_verbosity::Int=1,
-                      linesearch::AbstractLineSearch=HagerZhangLineSearch())
+                      maxiter::Int=MAXITER[], # 1_000_000
+                      gradtol::Real=GRADTOL[], # 1e-8
+                      verbosity::Int=VERBOSITY[], # 1
+                      ls_maxiter::Int=LS_MAXITER[], # 10
+                      ls_maxfg::Int=LS_MAXFG[], # 20
+                      ls_verbosity::Int=LS_VERBOSITY[], # 1
+                      linesearch = HagerZhangLineSearch(maxiter=ls_maxiter, maxfg=ls_maxfg, verbosity=ls_verbosity))
 
 ConjugateGradient optimization algorithm.
 
-## Fields
-- `flavor`: The flavor of the conjugate gradient algorithm (for selecting the β parameter)
+## Parameters
+- `flavor`: The flavor of the conjugate gradient algorithm (for selecting the β parameter; see below)
 - `restart::Int`: The number of iterations after which to reset the search direction.
 - `maxiter::Int`: The maximum number of iterations.
 - `gradtol::T`: The tolerance for the norm of the gradient.
-- `linesearch::L`: The line search algorithm to use.
 - `verbosity::Int`: The verbosity level of the optimization algorithm.
+- `ls_maxiter::Int`: The maximum number of iterations for the line search.
+- `ls_maxfg::Int`: The maximum number of function evaluations for the line search.
 - `ls_verbosity::Int`: The verbosity level of the line search algorithm.
+- `linesearch`: The line search algorithm to use; if a custom value is provided,
+  it overrides `ls_maxiter`, `ls_maxfg`, and `ls_verbosity`.
 
 Both verbosity levels use the following scheme:
 - 0: no output
@@ -28,6 +33,13 @@ Both verbosity levels use the following scheme:
 - 2: convergence information at the end of the algorithm
 - 3: progress information after each iteration
 - 4: more detailed information (only for the linesearch)
+
+The `flavor` parameter can take the values
+- `HagerZhang(; η::Real=4 // 10, θ::Real=1 // 1)`: Hager-Zhang formula for β
+- `HestenesStiefel(; pos = true)`: Hestenes-Stiefel formula for β
+- `FletcherReeves()`: Fletcher-Reeves formula for β
+- `PolakRibiere(; pos = true)`: Polak-Ribiere formula for β
+- `DaiYuan()`: Dai-Yuan formula for β
 """
 struct ConjugateGradient{F<:CGFlavor,T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
     flavor::F
@@ -36,20 +48,21 @@ struct ConjugateGradient{F<:CGFlavor,T<:Real,L<:AbstractLineSearch} <: Optimizat
     gradtol::T
     verbosity::Int
     linesearch::L
-    ls_maxiter::Int
-    ls_verbosity::Int
 end
 function ConjugateGradient(;
                            flavor::CGFlavor=HagerZhang(),
                            restart::Int=typemax(Int),
-                           maxiter::Int=typemax(Int),
-                           gradtol::Real=1e-8,
-                           verbosity::Int=1,
-                           ls_maxiter::Int=10,
-                           ls_verbosity::Int=1,
-                           linesearch::AbstractLineSearch=HagerZhangLineSearch())
-    return ConjugateGradient(flavor, restart, maxiter, gradtol, verbosity,
-                             linesearch, ls_maxiter, ls_verbosity)
+                           maxiter::Int=MAXITER[],
+                           gradtol::Real=GRADTOL[],
+                           verbosity::Int=VERBOSITY[],
+                           ls_maxiter::Int=LS_MAXITER[],
+                           ls_maxfg::Int=LS_MAXFG[],
+                           ls_verbosity::Int=LS_VERBOSITY[],
+                           linesearch::AbstractLineSearch=HagerZhangLineSearch(;
+                                                                               maxiter=ls_maxiter,
+                                                                               maxfg=ls_maxfg,
+                                                                               verbosity=ls_verbosity))
+    return ConjugateGradient(flavor, restart, maxiter, gradtol, verbosity, linesearch)
 end
 
 function optimize(fg, x, alg::ConjugateGradient;
@@ -118,9 +131,7 @@ function optimize(fg, x, alg::ConjugateGradient;
         _dlast[] = η
         x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
                                             initialguess=α,
-                                            retract=retract, inner=inner,
-                                            maxiter=alg.ls_maxiter,
-                                            verbosity=alg.ls_verbosity)
+                                            retract=retract, inner=inner)
         numfg += nfg
         numiter += 1
         x, f, g = finalize!(x, f, g, numiter)

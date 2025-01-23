@@ -2,7 +2,17 @@ module OptimKit
 
 using LinearAlgebra: LinearAlgebra
 using Printf
+using ScopedValues
 using Base: @kwdef
+
+# Default values for the keyword arguments using ScopedValues
+const LS_MAXITER = ScopedValue(10)
+const LS_MAXFG = ScopedValue(20)
+const LS_VERBOSITY = ScopedValue(1)
+
+const GRADTOL = ScopedValue(1e-8)
+const MAXITER = ScopedValue(1_000_000)
+const VERBOSITY = ScopedValue(1)
 
 _retract(x, d, α) = (x + α * d, d)
 _inner(x, v1, v2) = v1 === v2 ? LinearAlgebra.norm(v1)^2 : LinearAlgebra.dot(v1, v2)

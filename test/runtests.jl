@@ -13,12 +13,11 @@ using LinearAlgebra
                                         [1.0, 2.0, 3.0])]
     f₀, g₀ = fg(x₀)
     for i in 1:100
-        global c₁ = 0.5 * rand()
-        global c₂ = 0.5 + 0.5 * rand()
+        c₁ = 0.5 * rand()
+        c₂ = 0.5 + 0.5 * rand()
 
-        ls = HagerZhangLineSearch(; c₁=c₁, c₂=c₂, ϵ=0, ρ=1.5)
+        ls = HagerZhangLineSearch(; c₁=c₁, c₂=c₂, ϵ=0, ρ=1.5, maxfg=100, maxiter=100)
         x, f, g, ξ, α, numfg = ls(fg, x₀, -g₀; verbosity=4)
-
         @test f ≈ fg(x)[1]
         @test g ≈ fg(x)[2]
         @test ξ == -g₀
@@ -26,15 +25,13 @@ using LinearAlgebra
         @test f <= f₀ + α * c₁ * dot(ξ, g₀) || (2 * c₁ - 1) * dot(ξ, g₀) > dot(ξ, g)
 
         x, f, g, ξ, α, numfg = ls(fg, x₀, -g₀; initialguess=1e-4, verbosity=2) # test extrapolation phase
-
         @test f ≈ fg(x)[1]
         @test g ≈ fg(x)[2]
         @test ξ == -g₀
         @test dot(ξ, g) >= c₂ * dot(ξ, g₀)
         @test f <= f₀ + α * c₁ * dot(ξ, g₀) || (2 * c₁ - 1) * dot(ξ, g₀) > dot(ξ, g)
 
-        x, f, g, ξ, α, numfg = ls(fg, x₀, -g₀; initialguess=1e4, verbosity=0) # test infinities
-
+        x, f, g, ξ, α, numfg = ls(fg, x₀, -g₀; initialguess=1e4) # test infinities
         @test f ≈ fg(x)[1]
         @test g ≈ fg(x)[2]
         @test ξ == -g₀
@@ -77,4 +74,9 @@ algorithms = (GradientDescent, ConjugateGradient, LBFGS)
     x, f, g, numfg, normgradhistory = optimize(fg, x₀, alg)
     @test x ≈ y rtol = 1e-7
     @test f < 1e-14
+end
+
+@testset "Aqua" verbose = true begin
+    using Aqua
+    Aqua.test_all(OptimKit)
 end

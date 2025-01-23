@@ -1,25 +1,29 @@
 """
-    struct LBFGS{T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
     LBFGS(m::Int = 8; 
-          maxiter = typemax(Int),
-          gradtol::Real = 1e-8,
           acceptfirst::Bool = true,
-          verbosity::Int = 1,
-          ls_verbosity::Int = 1,
-          linesearch::AbstractLineSearch = HagerZhangLineSearch())
+          maxiter::Int=MAXITER[], # 1_000_000
+          gradtol::Real=GRADTOL[], # 1e-8
+          verbosity::Int=VERBOSITY[], # 1
+          ls_maxiter::Int=LS_MAXITER[], # 10
+          ls_maxfg::Int=LS_MAXFG[], # 20
+          ls_verbosity::Int=LS_VERBOSITY[], # 1
+          linesearch = HagerZhangLineSearch(maxiter=ls_maxiter, maxfg=ls_maxfg, verbosity=ls_verbosity))
 
 LBFGS optimization algorithm.
 
-## Fields
+## Parameters
 - `m::Int`: The number of previous iterations to store for the limited memory BFGS approximation.
 - `maxiter::Int`: The maximum number of iterations.
 - `gradtol::T`: The tolerance for the norm of the gradient.
-- `acceptfirst::Bool`: Whether to accept the first step of the line search.
-- `linesearch::L`: The line search algorithm to use.
 - `verbosity::Int`: The verbosity level of the optimization algorithm.
+- `acceptfirst::Bool`: Whether to accept the first step of the line search.
+- `ls_maxiter::Int`: The maximum number of iterations for the line search.
+- `ls_maxfg::Int`: The maximum number of function evaluations for the line search.
 - `ls_verbosity::Int`: The verbosity level of the line search algorithm.
+- `linesearch`: The line search algorithm to use; if a custom value is provided,
+  it overrides `ls_maxiter`, `ls_maxfg`, and `ls_verbosity`.
 
-Both verbosity levels use the following scheme:
+Both `verbosity` and `ls_verbosity` use the following scheme:
 - 0: no output
 - 1: only warnings upon non-convergence
 - 2: convergence information at the end of the algorithm
@@ -33,19 +37,20 @@ struct LBFGS{T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
     acceptfirst::Bool
     verbosity::Int
     linesearch::L
-    ls_maxiter::Int
-    ls_verbosity::Int
 end
 function LBFGS(m::Int=8;
-               maxiter::Int=typemax(Int),
-               gradtol::Real=1e-8,
                acceptfirst::Bool=true,
-               verbosity::Int=1,
-               ls_maxiter::Int=10,
-               ls_verbosity::Int=1,
-               linesearch::AbstractLineSearch=HagerZhangLineSearch())
-    return LBFGS(m, maxiter, gradtol, acceptfirst, verbosity,
-                 linesearch, ls_maxiter, ls_verbosity)
+               maxiter::Int=MAXITER[],
+               gradtol::Real=GRADTOL[],
+               verbosity::Int=VERBOSITY[],
+               ls_maxiter::Int=LS_MAXITER[],
+               ls_maxfg::Int=LS_MAXFG[],
+               ls_verbosity::Int=LS_VERBOSITY[],
+               linesearch::AbstractLineSearch=HagerZhangLineSearch(;
+                                                                   maxiter=ls_maxiter,
+                                                                   maxfg=ls_maxfg,
+                                                                   verbosity=ls_verbosity))
+    return LBFGS(m, maxiter, gradtol, acceptfirst, verbosity, linesearch)
 end
 
 function optimize(fg, x, alg::LBFGS;
@@ -103,9 +108,7 @@ function optimize(fg, x, alg::LBFGS;
                                             initialguess=one(f),
                                             acceptfirst=alg.acceptfirst,
                                             # for some reason, line search seems to converge to solution alpha = 2 in most cases if acceptfirst = false. If acceptfirst = true, the initial value of alpha can immediately be accepted. This typically leads to a more erratic convergence of normgrad, but to less function evaluations in the end.
-                                            retract=retract, inner=inner,
-                                            maxiter=alg.ls_maxiter,
-                                            verbosity=alg.ls_verbosity)
+                                            retract=retract, inner=inner)
         numfg += nfg
         numiter += 1
         x, f, g = finalize!(x, f, g, numiter)
