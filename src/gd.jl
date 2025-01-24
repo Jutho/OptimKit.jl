@@ -117,8 +117,8 @@ function optimize(fg, x, alg::GradientDescent;
                            numiter, t, f, normgrad)
     else
         verbosity >= 1 &&
-            @warn @sprintf("GD: not converged to requested tol: f = %.12f, ‖∇f‖ = %.4e",
-                           f, normgrad)
+            @warn @sprintf("GD: not converged to requested tol after %d iterations and time %.2f s: f = %.12f, ‖∇f‖ = %.4e",
+                           numiter, t, f, normgrad)
     end
     history = [fhistory normgradhistory]
     return x, f, g, numfg, history
