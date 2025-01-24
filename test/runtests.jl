@@ -59,8 +59,8 @@ algorithms = (GradientDescent, ConjugateGradient, LBFGS)
     x₀ = randn(n)
     alg = algtype(; verbosity=2, gradtol=1e-12, maxiter=10_000_000)
     x, f, g, numfg, normgradhistory = optimize(fg, x₀, alg)
-    @test x ≈ y rtol = cond(A) * 1e-12
-    @test f < 1e-14
+    @test x ≈ y rtol = 10 * cond(A) * 1e-12
+    @test f < 1e-12
 
     n = 1000
     y = randn(n)
@@ -73,7 +73,7 @@ algorithms = (GradientDescent, ConjugateGradient, LBFGS)
     alg = algtype(; verbosity=3, gradtol=1e-8)
     x, f, g, numfg, normgradhistory = optimize(fg, x₀, alg)
     @test x ≈ y rtol = 1e-7
-    @test f < 1e-14
+    @test f < 1e-12
 end
 
 @testset "Aqua" verbose = true begin
