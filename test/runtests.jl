@@ -57,9 +57,9 @@ algorithms = (GradientDescent, ConjugateGradient, LBFGS)
     A = randn(n, n)
     fg = quadraticproblem(A' * A, y)
     x₀ = randn(n)
-    alg = algtype(; verbosity=2, gradtol=1e-9, maxiter=10_000_000)
+    alg = algtype(; verbosity=2, gradtol=1e-12, maxiter=10_000_000)
     x, f, g, numfg, normgradhistory = optimize(fg, x₀, alg)
-    @test x ≈ y
+    @test x ≈ y rtol = cond(A) * 1e-12
     @test f < 1e-14
 
     n = 1000
