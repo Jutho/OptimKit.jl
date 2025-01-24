@@ -30,8 +30,7 @@ const _glast = Ref{Any}()
 const _dlast = Ref{Any}()
 
 """
-    x, f, g, numfg, history =
-function optimize(fg, x, alg;
+    optimize(fg, x, alg;
                   precondition=_precondition,
                   (finalize!)=_finalize!,
                   hasconverged=DefaultHasConverged(alg.gradtol),
@@ -39,6 +38,7 @@ function optimize(fg, x, alg;
                   retract=_retract, inner=_inner, (transport!)=_transport!,
                   (scale!)=_scale!, (add!)=_add!,
                   isometrictransport=(transport! == _transport! && inner == _inner))
+    -> x, f, g, numfg, history
 
 Optimize (minimize) the objective function returned as the first value of `fg`, where the
 second value contains the gradient, starting from a point `x` and using the algorithm
