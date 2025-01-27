@@ -3,6 +3,7 @@ module OptimKit
 using LinearAlgebra: LinearAlgebra
 using Printf
 using ScopedValues
+using VectorInterface
 using Base: @kwdef
 
 # Default values for the keyword arguments using ScopedValues
@@ -14,15 +15,34 @@ const GRADTOL = ScopedValue(1e-8)
 const MAXITER = ScopedValue(1_000_000)
 const VERBOSITY = ScopedValue(1)
 
-_retract(x, d, α) = (x + α * d, d)
-_inner(x, v1, v2) = v1 === v2 ? LinearAlgebra.norm(v1)^2 : LinearAlgebra.dot(v1, v2)
+# Default values for the manifold structure
+_retract(x, d, α) = (add(x, d, α), d)
+_inner(x, v1, v2) = v1 === v2 ? norm(v1)^2 : real(inner(v1, v2))
 _transport!(v, xold, d, α, xnew) = v
-_scale!(v, α) = LinearAlgebra.rmul!(v, α)
-_add!(vdst, vsrc, α) = LinearAlgebra.axpy!(α, vsrc, vdst)
+_scale!(v, α) = scale!!(v, α)
+_add!(vdst, vsrc, α) = add!!(vdst, vsrc, α)
 
 _precondition(x, g) = deepcopy(g)
 _finalize!(x, f, g, numiter) = x, f, g
 
+# Default structs for new convergence and termination keywords
+@kwdef struct DefaultHasConverged{T<:Real}
+    gradtol::T
+end
+
+function (d::DefaultHasConverged)(x, f, g, normgrad)
+    return normgrad <= d.gradtol
+end
+
+@kwdef struct DefaultShouldStop
+    maxiter::Int
+end
+
+function (d::DefaultShouldStop)(x, f, g, numfg, numiter, t)
+    return numiter >= d.maxiter
+end
+
+# Optimization
 abstract type OptimizationAlgorithm end
 
 const _xlast = Ref{Any}()
@@ -85,7 +105,6 @@ Also see [`GradientDescent`](@ref), [`ConjugateGradient`](@ref), [`LBFGS`](@ref)
 function optimize end
 
 include("linesearches.jl")
-include("terminate.jl")
 include("gd.jl")
 include("cg.jl")
 include("lbfgs.jl")

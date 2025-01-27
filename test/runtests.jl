@@ -49,17 +49,30 @@ function quadraticproblem(B, y)
     return fg
 end
 
+function quadratictupleproblem(B, y)
+    function fg(x)
+        x1, x2 = x
+        y1, y2 = y
+        g1 = B * (x1 - y1)
+        g2 = x2 - y2
+        f = dot(x1 - y1, g1) / 2 + (x2 - y2)^2 / 2
+        return f, (g1, g2)
+    end
+    return fg
+end
+
 algorithms = (GradientDescent, ConjugateGradient, LBFGS)
 
 @testset "Optimization Algorithm $algtype" for algtype in algorithms
     n = 10
     y = randn(n)
     A = randn(n, n)
-    fg = quadraticproblem(A' * A, y)
+    A = A' * A
+    fg = quadraticproblem(A, y)
     x₀ = randn(n)
     alg = algtype(; verbosity=2, gradtol=1e-12, maxiter=10_000_000)
     x, f, g, numfg, normgradhistory = optimize(fg, x₀, alg)
-    @test x ≈ y rtol = 10 * cond(A) * 1e-12
+    @test x ≈ y rtol = cond(A) * 1e-12
     @test f < 1e-12
 
     n = 1000
@@ -68,11 +81,12 @@ algorithms = (GradientDescent, ConjugateGradient, LBFGS)
     smax = maximum(S)
     A = U * Diagonal(1 .+ S ./ smax) * U'
     # well conditioned, all eigenvalues between 1 and 2
-    fg = quadraticproblem(A' * A, y)
-    x₀ = randn(n)
+    fg = quadratictupleproblem(A' * A, (y, 1.0))
+    x₀ = (randn(n), 2.0)
     alg = algtype(; verbosity=3, gradtol=1e-8)
     x, f, g, numfg, normgradhistory = optimize(fg, x₀, alg)
-    @test x ≈ y rtol = 1e-7
+    @test x[1] ≈ y rtol = 1e-7
+    @test x[2] ≈ 1 rtol = 1e-7
     @test f < 1e-12
 end
 
