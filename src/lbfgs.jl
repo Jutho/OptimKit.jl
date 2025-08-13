@@ -83,6 +83,7 @@ function optimize(fg, x, alg::LBFGS;
         @info @sprintf("LBFGS: initializing with f = %.12f, ‖∇f‖ = %.4e", f, normgrad)
 
     while !(_hasconverged || _shouldstop)
+        t₀ = time()
         # compute new search direction
         if length(H) > 0
             Hg = let x = x
