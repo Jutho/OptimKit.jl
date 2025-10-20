@@ -129,22 +129,24 @@ Test the compatibility between the computation of the gradient, the retraction a
 It is up to the user to check that the values in `dfs1` and `dfs2` match up to expected precision, by inspecting the numerical values or plotting them. If these values don't match, the linesearch in `optimize` cannot be expected to work.
 """
 function optimtest(fg, x, d=fg(x)[2]; alpha=-0.1:0.001:0.1, retract=_retract, inner=_inner)
-    f0, g0 = fg(x)
-    fs = Vector{typeof(f0)}(undef, length(alpha) - 1)
-    dfs1 = similar(fs, length(alpha) - 1)
-    dfs2 = similar(fs, length(alpha) - 1)
-    for i in 1:(length(alpha) - 1)
-        a1 = alpha[i]
-        a2 = alpha[i + 1]
-        f1, = fg(retract(x, d, a1)[1])
-        f2, = fg(retract(x, d, a2)[1])
-        dfs1[i] = (f2 - f1) / (a2 - a1)
-        xmid, dmid = retract(x, d, (a1 + a2) / 2)
-        fmid, gmid = fg(xmid)
-        fs[i] = fmid
-        dfs2[i] = inner(xmid, dmid, gmid)
+    # evaluate function at given edge points
+    fs_edges = map(alpha) do a
+        f, = fg(retract(x, d, a)[1])
+        return f
     end
-    alphas = collect((alpha[2:end] + alpha[1:(end - 1)]) / 2)
+    a1s = alpha[1:(end - 1)]
+    a2s = alpha[2:end]
+    dfs1 = (fs_edges[2:end] .- fs_edges[1:(end - 1)]) ./ (a2s .- a1s)
+    # evaluate function and gradient at midpoints
+    alphas = collect((a1s + a2s) / 2)
+    fs_dfs = map(alphas) do a
+        xmid, dmid = retract(x, d, a)
+        fmid, gmid = fg(xmid)
+        df = inner(xmid, dmid, gmid)
+        return fmid, df
+    end
+    fs = first.(fs_dfs)
+    dfs2 = last.(fs_dfs)
     return alphas, fs, dfs1, dfs2
 end
 
