@@ -104,6 +104,12 @@ Also see [`GradientDescent`](@ref), [`ConjugateGradient`](@ref), [`LBFGS`](@ref)
 """
 function optimize end
 
+function format_time(t::Float64)
+    return t < 60 ? @sprintf("%.2f s", t) :
+           t < 2600 ? @sprintf("%.2f m", t / 60) :
+           @sprintf("%.2f h", t / 3600)
+end
+
 include("linesearches.jl")
 include("gd.jl")
 include("cg.jl")
