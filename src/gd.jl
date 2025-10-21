@@ -78,6 +78,7 @@ function optimize(fg, x, alg::GradientDescent;
     verbosity >= 2 &&
         @info @sprintf("GD: initializing with f = %.12f, ‖∇f‖ = %.4e", f, normgrad)
     while !(_hasconverged || _shouldstop)
+        told = t
         # compute new search direction
         Pg = precondition(x, deepcopy(g))
         η = scale!(Pg, -1) # we don't need g or Pg anymore, so we can overwrite it
@@ -97,6 +98,7 @@ function optimize(fg, x, alg::GradientDescent;
         push!(fhistory, f)
         push!(normgradhistory, normgrad)
         t = time() - t₀
+        Δt = t - told
         _hasconverged = hasconverged(x, f, g, normgrad)
         _shouldstop = shouldstop(x, f, g, numfg, numiter, t)
 
@@ -105,8 +107,8 @@ function optimize(fg, x, alg::GradientDescent;
             break
         end
         verbosity >= 3 &&
-            @info @sprintf("GD: iter %4d, time %7.2f s: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, nfg = %d",
-                           numiter, t, f, normgrad, α, nfg)
+            @info @sprintf("GD: iter %4d, Δt %7.2f s: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, nfg = %d",
+                           numiter, Δt, f, normgrad, α, nfg)
 
         # increase α for next step
         α = 2 * α

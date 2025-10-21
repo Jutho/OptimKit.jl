@@ -83,7 +83,7 @@ function optimize(fg, x, alg::LBFGS;
         @info @sprintf("LBFGS: initializing with f = %.12f, ‖∇f‖ = %.4e", f, normgrad)
 
     while !(_hasconverged || _shouldstop)
-        t₀ = time()
+        told = t
         # compute new search direction
         if length(H) > 0
             Hg = let x = x
@@ -118,6 +118,7 @@ function optimize(fg, x, alg::LBFGS;
         push!(fhistory, f)
         push!(normgradhistory, normgrad)
         t = time() - t₀
+        Δt = t - told
         _hasconverged = hasconverged(x, f, g, normgrad)
         _shouldstop = shouldstop(x, f, g, numfg, numiter, t)
 
@@ -126,8 +127,8 @@ function optimize(fg, x, alg::LBFGS;
             break
         end
         verbosity >= 3 &&
-            @info @sprintf("LBFGS: iter %4d, time %7.2f s: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, m = %d, nfg = %d",
-                           numiter, t, f, normgrad, α, length(H), nfg)
+            @info @sprintf("LBFGS: iter %4d, Δt %7.2f: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, m = %d, nfg = %d",
+                           numiter, Δt, f, normgrad, α, length(H), nfg)
 
         # transport gprev, ηprev and vectors in Hessian approximation to x
         gprev = transport!(gprev, xprev, ηprev, α, x)
