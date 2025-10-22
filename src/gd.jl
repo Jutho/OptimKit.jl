@@ -76,8 +76,9 @@ function optimize(fg, x, alg::GradientDescent;
 
     numiter = 0
     verbosity >= 2 &&
-        @info @sprintf("GD: initializing with f = %.12f, ‖∇f‖ = %.4e", f, normgrad)
+        @info @sprintf("GD: initializing with f = %.12e, ‖∇f‖ = %.4e", f, normgrad)
     while !(_hasconverged || _shouldstop)
+        told = t
         # compute new search direction
         Pg = precondition(x, deepcopy(g))
         η = scale!(Pg, -1) # we don't need g or Pg anymore, so we can overwrite it
@@ -97,6 +98,7 @@ function optimize(fg, x, alg::GradientDescent;
         push!(fhistory, f)
         push!(normgradhistory, normgrad)
         t = time() - t₀
+        Δt = t - told
         _hasconverged = hasconverged(x, f, g, normgrad)
         _shouldstop = shouldstop(x, f, g, numfg, numiter, t)
 
@@ -105,20 +107,20 @@ function optimize(fg, x, alg::GradientDescent;
             break
         end
         verbosity >= 3 &&
-            @info @sprintf("GD: iter %4d, time %7.2f s: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, nfg = %d",
-                           numiter, t, f, normgrad, α, nfg)
+            @info @sprintf("GD: iter %4d, Δt %s: f = %.12e, ‖∇f‖ = %.4e, α = %.2e, nfg = %d",
+                           numiter, format_time(Δt), f, normgrad, α, nfg)
 
         # increase α for next step
         α = 2 * α
     end
     if _hasconverged
         verbosity >= 2 &&
-            @info @sprintf("GD: converged after %d iterations and time %.2f s: f = %.12f, ‖∇f‖ = %.4e",
-                           numiter, t, f, normgrad)
+            @info @sprintf("GD: converged after %d iterations and time %s: f = %.12e, ‖∇f‖ = %.4e",
+                           numiter, format_time(t), f, normgrad)
     else
         verbosity >= 1 &&
-            @warn @sprintf("GD: not converged to requested tol after %d iterations and time %.2f s: f = %.12f, ‖∇f‖ = %.4e",
-                           numiter, t, f, normgrad)
+            @warn @sprintf("GD: not converged to requested tol after %d iterations and time %s: f = %.12e, ‖∇f‖ = %.4e",
+                           numiter, format_time(t), f, normgrad)
     end
     history = [fhistory normgradhistory]
     return x, f, g, numfg, history

@@ -98,9 +98,10 @@ function optimize(fg, x, alg::ConjugateGradient;
 
     numiter = 0
     verbosity >= 2 &&
-        @info @sprintf("CG: initializing with f = %.12f, ‖∇f‖ = %.4e", f, normgrad)
+        @info @sprintf("CG: initializing with f = %.12e, ‖∇f‖ = %.4e", f, normgrad)
     local xprev, gprev, Pgprev, ηprev
     while !(_hasconverged || _shouldstop)
+        told = t
         # compute new search direction
         if precondition === _precondition
             Pg = g
@@ -140,6 +141,7 @@ function optimize(fg, x, alg::ConjugateGradient;
         push!(fhistory, f)
         push!(normgradhistory, normgrad)
         t = time() - t₀
+        Δt = t - told
         _hasconverged = hasconverged(x, f, g, normgrad)
         _shouldstop = shouldstop(x, f, g, numfg, numiter, t)
 
@@ -148,8 +150,8 @@ function optimize(fg, x, alg::ConjugateGradient;
             break
         end
         verbosity >= 3 &&
-            @info @sprintf("CG: iter %4d, time %7.2f s: f = %.12f, ‖∇f‖ = %.4e, α = %.2e, β = %.2e, nfg = %d",
-                           numiter, t, f, normgrad, α, β, nfg)
+            @info @sprintf("CG: iter %4d, Δt %s: f = %.12e, ‖∇f‖ = %.4e, α = %.2e, β = %.2e, nfg = %d",
+                           numiter, format_time(Δt), f, normgrad, α, β, nfg)
 
         # transport gprev, ηprev and vectors in Hessian approximation to x
         gprev = transport!(gprev, xprev, ηprev, α, x)
@@ -165,12 +167,12 @@ function optimize(fg, x, alg::ConjugateGradient;
     end
     if _hasconverged
         verbosity >= 2 &&
-            @info @sprintf("CG: converged after %d iterations and time %.2f s: f = %.12f, ‖∇f‖ = %.4e",
-                           numiter, t, f, normgrad)
+            @info @sprintf("CG: converged after %d iterations and time %s: f = %.12e, ‖∇f‖ = %.4e",
+                           numiter, format_time(t), f, normgrad)
     else
         verbosity >= 1 &&
-            @warn @sprintf("CG: not converged to requested tol after %d iterations and time %.2f s: f = %.12f, ‖∇f‖ = %.4e",
-                           numiter, t, f, normgrad)
+            @warn @sprintf("CG: not converged to requested tol after %d iterations and time %s: f = %.12e, ‖∇f‖ = %.4e",
+                           numiter, format_time(t), f, normgrad)
     end
     history = [fhistory normgradhistory]
     return x, f, g, numfg, history
