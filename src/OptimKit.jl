@@ -105,9 +105,17 @@ Also see [`GradientDescent`](@ref), [`ConjugateGradient`](@ref), [`LBFGS`](@ref)
 function optimize end
 
 function format_time(t::Float64)
-    return t < 60 ? @sprintf("%.2f s", t) :
-           t < 2600 ? @sprintf("%.2f m", t / 60) :
-           @sprintf("%.2f h", t / 3600)
+    if t < 1e-3
+        return @sprintf("%5.1f μs", 1e6*t)
+    elseif t < 1
+        return @sprintf("%5.1f ms", 1e3*t)
+    elseif t < 60
+        return @sprintf("%5.2f s", t)
+    elseif t < 3600
+        return @sprintf("%5.2f m", t / 60)
+    else
+        return @sprintf("%.2f h", t / 3600)
+    end
 end
 
 include("linesearches.jl")
