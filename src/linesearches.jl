@@ -333,7 +333,7 @@ function bisect(iter::HagerZhangLineSearchIterator, a::LineSearchPoint, b::LineS
     fmax = p₀.f + ϵ
     numfg = 0
     while true
-        if (b.α - a.α) <= eps(one(a.α))
+        if (b.α - a.α) <= eps(one(a.α)) || numfg >= iter.parameters.maxfg
             if verbosity >= 1
                 @warn @sprintf("  Linesearch bisection failure: [a, b] = [%.2e, %.2e], b-a = %.2e, dϕᵃ = %.2e, dϕᵇ = %.2e, (ϕᵇ - ϕᵃ)/(b-a) = %.2e",
                                a.α, b.α, b.α - a.α, a.dϕ, b.dϕ, (b.ϕ - a.ϕ) / (b.α - a.α))
@@ -374,7 +374,7 @@ function bracket(iter::HagerZhangLineSearchIterator{T}, c::LineSearchPoint) wher
 
     α = c.α
     while true
-        while !(isfinite(c.ϕ) && isfinite(c.dϕ))
+        while !(isfinite(c.ϕ) && isfinite(c.dϕ)) && numfg < iter.parameters.maxfg
             α = (a.α + α) / 2
             c = takestep(iter, α)
             numfg += 1
