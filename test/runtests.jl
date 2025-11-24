@@ -1,6 +1,8 @@
 using Test
 using OptimKit
 using LinearAlgebra
+using Random: Random
+Random.seed!(1234)
 
 # Test linesearches
 @testset "Linesearch" for (fg, x₀) in [(x -> (sin(x) + x^4, cos(x) + 4 * x^3), 0.0),

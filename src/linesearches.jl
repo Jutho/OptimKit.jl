@@ -49,6 +49,9 @@ Constructs a Hager-Zhang line search object with the specified parameters.
 - `θ::Real`: Parameter regulating the bisection step. Default is `1//2` (should probably not be changed).
 - `γ::Real`: Parameter triggering the bisection step, namely if bracket reduction rate is slower than `γ`. Default is `2//3`.
 - `ρ::Real`: Parameter controlling the initial bracket expansion rate. Default is `5//1`.
+- `maxiter::Int`: Hard limit on the number of iterations. Default is `OptimKit.LS_MAXITER[]` (set to 50).
+- `maxfg::Int`: Soft limit on the number of function evaluations. Default is `OptimKit.LS_MAXFG[]` (set to 100).
+- `verbosity::Int`: The verbosity level (see below). Default is `OptimKit.LS_VERBOSITY[]` (set to 0).
 
 ## Returns:
 This method returns a `HagerZhangLineSearch` object `ls`, that can then be can be applied as `ls(fg, x₀, η₀; kwargs...)`
@@ -333,7 +336,7 @@ function bisect(iter::HagerZhangLineSearchIterator, a::LineSearchPoint, b::LineS
     fmax = p₀.f + ϵ
     numfg = 0
     while true
-        if (b.α - a.α) <= eps(one(a.α)) || numfg >= iter.parameters.maxfg
+        if (b.α - a.α) <= eps(one(a.α))^(3 // 4) || numfg >= iter.parameters.maxfg
             if verbosity >= 1
                 @warn @sprintf("  Linesearch bisection failure: [a, b] = [%.2e, %.2e], b-a = %.2e, dϕᵃ = %.2e, dϕᵇ = %.2e, (ϕᵇ - ϕᵃ)/(b-a) = %.2e",
                                a.α, b.α, b.α - a.α, a.dϕ, b.dϕ, (b.ϕ - a.ϕ) / (b.α - a.α))
