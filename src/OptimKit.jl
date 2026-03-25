@@ -11,12 +11,13 @@ const LS_MAXITER = ScopedValue(10)
 const LS_MAXFG = ScopedValue(20)
 const LS_VERBOSITY = ScopedValue(1)
 
-const GRADTOL = ScopedValue(1e-8)
+const GRADTOL = ScopedValue(1.0e-8)
 const MAXITER = ScopedValue(1_000_000)
 const VERBOSITY = ScopedValue(1)
 
 # Default values for the manifold structure
 _retract(x, d, α) = (add(x, d, α), d)
+_invretract(x, y) = add(y, x, -1)
 _inner(x, v1, v2) = v1 === v2 ? norm(v1)^2 : real(inner(v1, v2))
 _transport!(v, xold, d, α, xnew) = v
 _scale!(v, α) = scale!!(v, α)
@@ -26,7 +27,7 @@ _precondition(x, g) = deepcopy(g)
 _finalize!(x, f, g, numiter) = x, f, g
 
 # Default structs for new convergence and termination keywords
-@kwdef struct DefaultHasConverged{T<:Real}
+@kwdef struct DefaultHasConverged{T <: Real}
     gradtol::T
 end
 
@@ -44,6 +45,7 @@ end
 
 # Optimization
 abstract type OptimizationAlgorithm end
+abstract type FixedPointAlgorithm end
 
 const _xlast = Ref{Any}()
 const _glast = Ref{Any}()
@@ -104,11 +106,61 @@ Also see [`GradientDescent`](@ref), [`ConjugateGradient`](@ref), [`LBFGS`](@ref)
 """
 function optimize end
 
+"""
+    fixedpoint(fp, x, alg;
+                  finalize! = _finalize!,
+                  shouldstop = DefaultShouldStop(alg.maxiter),
+                  hasconverged = DefaultHasConverged(alg.gradtol),
+                  retract = _retract, invretract = _invretract,
+                  inner = _inner, (transport!) = _transport!,
+                  (scale!) = _scale!, (add!) = _add!,
+                  isometrictransport = (transport! == _transport! && inner == _inner))
+    -> x, g, numfp, history
+
+Find a fixed point of the function `fp` starting from an initial point `x₀` and using the fixed point algorithm `alg`,
+which is an instance of `SimpleIteration` or `AndersonMixing`.
+
+Returns the final point `x`, the residual `g`, the total number of calls to `fp`,
+and the history of the norm of the residual across the different iterations.
+
+The algorithm is run until either `hasconverged(x, false, g, normg)` returns `true` or 
+`shouldstop(x, false, g, numfp, numiter, time)` returns `true`. The latter case happening before
+the former is considered to be a failure to converge, and a warning is issued.
+
+The keyword arguments are:
+-   `finalize!::Function`: A function that takes the final point `x`, a dummy variable `f = false`,
+    the residual `g`, and the iteration number, and returns a possibly modified values for
+    `x`, `f` and `g`. By default, the identity is used.
+    It is the user's responsibility to ensure that the modified values do not lead to
+    inconsistencies within the optimization algorithm.
+-   `hasconverged::Function`: A function that takes the current point `x`, a dummy variable `f = false`,
+    the residual `r`, and the norm of the residual, and returns a boolean indicating whether
+    the fixed point iteration has converged. By default, the norm of the residual is compared to the
+    tolerance `gradtol` as encoded in the algorithm instance.
+-   `shouldstop::Function`: A function that takes the current point `x`, a dummy variable `f = false`,
+    the residuals `g`, the number of calls to `fg`, the iteration number, and the time spent
+    so far, and returns a boolean indicating whether the optimization should stop. By default,
+    the number of iterations is compared to the maximum number of iterations as encoded in the
+    algorithm instance.
+
+Check the README of this package for further details on creating an algorithm instance,
+as well as for the meaning of the remaining keyword arguments and their default values.
+
+!!! Warning
+    
+    The default values of `hasconverged` and `shouldstop` are provided to ensure continuity
+    with the previous versions of this package. However, this behaviour might change in the
+    future.
+
+Also see [`SimpleIteration`](@ref) and [`AndersonMixing`](@ref).
+"""
+function fixedpoint end
+
 function format_time(t::Float64)
-    if t < 1e-3
-        return @sprintf("%5.1f μs", 1e6*t)
+    if t < 1.0e-3
+        return @sprintf("%5.1f μs", 1.0e6 * t)
     elseif t < 1
-        return @sprintf("%5.1f ms", 1e3*t)
+        return @sprintf("%5.1f ms", 1.0e3 * t)
     elseif t < 60
         return @sprintf("%5.2f s", t)
     elseif t < 3600
@@ -122,7 +174,8 @@ include("linesearches.jl")
 include("gd.jl")
 include("cg.jl")
 include("lbfgs.jl")
-
+include("simpleiteration.jl")
+include("anderson.jl")
 const gd = GradientDescent()
 const cg = ConjugateGradient()
 const lbfgs = LBFGS()
@@ -131,6 +184,7 @@ export optimize, gd, cg, lbfgs, optimtest
 export GradientDescent, ConjugateGradient, LBFGS
 export FletcherReeves, HestenesStiefel, PolakRibiere, HagerZhang, DaiYuan
 export HagerZhangLineSearch
+export fixedpoint, SimpleIteration, AndersonMixing
 
 """
     optimtest(fg, x, [d]; alpha = -0.1:0.001:0.1, retract = _retract, inner = _inner)
@@ -142,7 +196,7 @@ Test the compatibility between the computation of the gradient, the retraction a
 
 It is up to the user to check that the values in `dfs1` and `dfs2` match up to expected precision, by inspecting the numerical values or plotting them. If these values don't match, the linesearch in `optimize` cannot be expected to work.
 """
-function optimtest(fg, x, d=fg(x)[2]; alpha=-0.1:0.001:0.1, retract=_retract, inner=_inner)
+function optimtest(fg, x, d = fg(x)[2]; alpha = -0.1:0.001:0.1, retract = _retract, inner = _inner)
     # evaluate function at given edge points
     fs_edges = map(alpha) do a
         f, = fg(retract(x, d, a)[1])
