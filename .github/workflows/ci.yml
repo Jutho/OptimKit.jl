@@ -27,6 +27,8 @@ jobs:
           - ubuntu-latest
           - macOS-latest
           - windows-latest
+        arch:
+          - x64
     steps:
       - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@v3
@@ -55,6 +57,8 @@ jobs:
           - ubuntu-latest
           - macOS-latest
           - windows-latest
+        arch:
+          - x64
     steps:
       - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@v3
