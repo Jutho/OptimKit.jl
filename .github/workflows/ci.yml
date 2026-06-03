@@ -21,9 +21,8 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.8' # minimum version because of ScopedValues.jl
           - '1' # expands to latest version
-          - 'lts' # expands to latest LTS version
+          - 'min' # expands to minimum supported version
         os:
           - ubuntu-latest
           - macOS-latest
