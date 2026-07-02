@@ -1,5 +1,5 @@
 """
-    LBFGS(m::Int = 8; 
+    LBFGS(m::Int = 8;
           acceptfirst::Bool = true,
           maxiter::Int=MAXITER[], # 1_000_000
           gradtol::Real=GRADTOL[], # 1e-8
@@ -53,9 +53,63 @@ function LBFGS(m::Int=8;
     return LBFGS(m, maxiter, gradtol, acceptfirst, verbosity, linesearch)
 end
 
+"""
+    LBFGSState
+
+Captures the complete state of an LBFGS optimization, enabling checkpointing and
+warm-starting. Instances are produced by the `checkpoint` callback passed to
+[`optimize`](@ref), and can be passed back as the starting point to resume optimization.
+
+## Fields
+- `x`: Current parameter values
+- `f`: Current function value
+- `g`: Current gradient
+- `H`: Current LBFGS inverse Hessian approximation (`LBFGSInverseHessian`)
+- `numfg`: Cumulative number of function/gradient evaluations so far
+- `numiter`: Cumulative number of completed iterations
+- `fhistory`: History of function values (one entry per iteration)
+- `normgradhistory`: History of gradient norms (one entry per iteration)
+
+## Example
+
+Periodic checkpointing using `Serialization` from the standard library:
+
+```julia
+using Serialization, OptimKit
+
+checkpoint_fn = state -> serialize("checkpoint.jls", state)
+x, f, g, numfg, history = optimize(fg, x0, LBFGS(); checkpoint=checkpoint_fn)
+
+# resume from the last checkpoint
+state = deserialize("checkpoint.jls")
+x, f, g, numfg, history = optimize(fg, state, LBFGS())
+```
+
+!!! note
+    The `LBFGSState` struct stores references to the arrays `x`, `g`, and the vectors
+    inside `H`. When using GPU arrays or other non-standard backends, ensure your
+    serialization method handles those array types correctly.
+
+!!! note
+    When resuming, the `shouldstop` and `hasconverged` callbacks receive the *cumulative*
+    `numfg` and `numiter` values from the original run. Pass a custom `shouldstop` if you
+    need a fixed number of *additional* iterations.
+"""
+struct LBFGSState{X,G,F<:Real,H}
+    x::X
+    f::F
+    g::G
+    H::H
+    numfg::Int
+    numiter::Int
+    fhistory::Vector{F}
+    normgradhistory::Vector{F}
+end
+
 function optimize(fg, x, alg::LBFGS;
                   precondition=_precondition,
                   (finalize!)=_finalize!,
+                  checkpoint=nothing,
                   shouldstop=DefaultShouldStop(alg.maxiter),
                   hasconverged=DefaultHasConverged(alg.gradtol),
                   retract=_retract, inner=_inner, (transport!)=_transport!,
@@ -70,14 +124,65 @@ function optimize(fg, x, alg::LBFGS;
     normgrad = sqrt(innergg)
     fhistory = [f]
     normgradhistory = [normgrad]
-    t = time() - t₀
-    _hasconverged = hasconverged(x, f, g, normgrad)
-    _shouldstop = shouldstop(x, f, g, numfg, numiter, t)
 
     TangentType = typeof(g)
     ScalarType = typeof(innergg)
     m = alg.m
     H = LBFGSInverseHessian(m, TangentType[], TangentType[], ScalarType[])
+
+    return _lbfgs_loop!(fg, x, f, g, H, numfg, numiter, normgrad, fhistory,
+                        normgradhistory, t₀, alg,
+                        precondition, finalize!, checkpoint,
+                        shouldstop, hasconverged,
+                        retract, inner, transport!, scale!, add!,
+                        isometrictransport)
+end
+
+"""
+    optimize(fg, state::LBFGSState, alg::LBFGS; kwargs...) -> x, f, g, numfg, history
+
+Resume an LBFGS optimization from a previously saved [`LBFGSState`](@ref). All keyword
+arguments are the same as for the standard `optimize` call. The `numfg`, `numiter`,
+`fhistory`, and `normgradhistory` are continued from the checkpoint; the returned
+`history` matrix covers the full run including prior iterations.
+"""
+function optimize(fg, state::LBFGSState, alg::LBFGS;
+                  precondition=_precondition,
+                  (finalize!)=_finalize!,
+                  checkpoint=nothing,
+                  shouldstop=DefaultShouldStop(alg.maxiter),
+                  hasconverged=DefaultHasConverged(alg.gradtol),
+                  retract=_retract, inner=_inner, (transport!)=_transport!,
+                  (scale!)=_scale!, (add!)=_add!,
+                  isometrictransport=(transport! == _transport! && inner == _inner))
+    t₀ = time()
+    x = state.x
+    f = state.f
+    g = state.g
+    H = deepcopy(state.H)
+    numfg = state.numfg
+    numiter = state.numiter
+    normgrad = state.normgradhistory[end]
+    fhistory = copy(state.fhistory)
+    normgradhistory = copy(state.normgradhistory)
+
+    return _lbfgs_loop!(fg, x, f, g, H, numfg, numiter, normgrad, fhistory,
+                        normgradhistory, t₀, alg,
+                        precondition, finalize!, checkpoint,
+                        shouldstop, hasconverged,
+                        retract, inner, transport!, scale!, add!,
+                        isometrictransport)
+end
+
+function _lbfgs_loop!(fg, x, f, g, H, numfg, numiter, normgrad, fhistory, normgradhistory,
+                      t₀, alg::LBFGS,
+                      precondition, finalize!, checkpoint,
+                      shouldstop, hasconverged,
+                      retract, inner, transport!, scale!, add!, isometrictransport)
+    verbosity = alg.verbosity
+    t = time() - t₀
+    _hasconverged = hasconverged(x, f, g, normgrad)
+    _shouldstop = shouldstop(x, f, g, numfg, numiter, t)
 
     verbosity >= 2 &&
         @info @sprintf("LBFGS: initializing with f = %.12e, ‖∇f‖ = %.4e", f, normgrad)
@@ -122,13 +227,12 @@ function optimize(fg, x, alg::LBFGS;
         _hasconverged = hasconverged(x, f, g, normgrad)
         _shouldstop = shouldstop(x, f, g, numfg, numiter, t)
 
-        # check stopping criteria and print info
-        if _hasconverged || _shouldstop
-            break
+        # print iteration info if continuing (preserves original verbosity behavior)
+        if !(_hasconverged || _shouldstop)
+            verbosity >= 3 &&
+                @info @sprintf("LBFGS: iter %4d, Δt %s: f = %.12e, ‖∇f‖ = %.4e, α = %.2e, m = %d, nfg = %d",
+                               numiter, format_time(Δt), f, normgrad, α, length(H), nfg)
         end
-        verbosity >= 3 &&
-            @info @sprintf("LBFGS: iter %4d, Δt %s: f = %.12e, ‖∇f‖ = %.4e, α = %.2e, m = %d, nfg = %d",
-                           numiter, format_time(Δt), f, normgrad, α, length(H), nfg)
 
         # transport gprev, ηprev and vectors in Hessian approximation to x
         gprev = transport!(gprev, xprev, ηprev, α, x)
@@ -188,6 +292,16 @@ function optimize(fg, x, alg::LBFGS;
             norms = sqrt(innerss)
             ρ = innerss / innersy
             push!(H, (scale!(s, 1 / norms), scale!(y, 1 / norms), ρ))
+        end
+
+        # checkpoint after H is updated; called every iteration including the last
+        if !isnothing(checkpoint)
+            checkpoint(LBFGSState(x, f, g, H, numfg, numiter, fhistory, normgradhistory))
+        end
+
+        # break after checkpoint so the final state is always captured
+        if _hasconverged || _shouldstop
+            break
         end
     end
     if _hasconverged

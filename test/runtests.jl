@@ -92,6 +92,60 @@ algorithms = (GradientDescent, ConjugateGradient, LBFGS)
     @test f < 1e-12
 end
 
+@testset "LBFGS checkpoint and resume" begin
+    n = 20
+    y = randn(n)
+    A = let B = randn(n, n); B' * B + I end
+    fg = quadraticproblem(A, y)
+    x₀ = randn(n)
+    alg = LBFGS(; verbosity=0, gradtol=1e-12, maxiter=10_000_000)
+
+    # Run to full convergence as ground truth
+    x_full, f_full, g_full, numfg_full, history_full = optimize(fg, x₀, alg)
+
+    # Run with early stopping after 5 iterations and collect checkpoint
+    saved_states = LBFGSState[]
+    checkpoint_fn = state -> push!(saved_states, state)
+    stop_after_5 = (x, f, g, numfg, numiter, t) -> numiter >= 5
+    converged_1e12 = (x, f, g, normgrad) -> normgrad <= 1e-12
+    x_part, f_part, g_part, numfg_part, history_part =
+        optimize(fg, x₀, alg; checkpoint=checkpoint_fn, shouldstop=stop_after_5,
+                 hasconverged=converged_1e12)
+
+    # Checkpoint is called once per completed iteration
+    @test length(saved_states) == 5
+
+    # Checkpoint state at iteration 5 matches optimize's returned state
+    state5 = saved_states[end]
+    @test state5.numiter == 5
+    @test state5.x ≈ x_part
+    @test state5.f ≈ f_part
+    @test state5.numfg == numfg_part
+    @test length(state5.fhistory) == 6      # initial + 5 iterations
+    @test length(state5.normgradhistory) == 6
+
+    # Resume from checkpoint and run to convergence; result must match full run
+    x_resumed, f_resumed, g_resumed, numfg_resumed, history_resumed =
+        optimize(fg, state5, alg)
+    @test x_resumed ≈ x_full rtol = 1e-10
+    @test f_resumed ≈ f_full rtol = 1e-10
+
+    # Resumed history prepends the prior run's history
+    @test size(history_resumed, 1) == size(history_full, 1)
+    @test history_resumed[1:6, :] ≈ history_part  # first 6 rows identical to partial run
+
+    # Resume with additional checkpoint continues counting from previous numiter
+    extra_states = LBFGSState[]
+    stop_after_3_more = (x, f, g, numfg, numiter, t) -> numiter >= state5.numiter + 3
+    optimize(fg, state5, alg;
+             checkpoint=state -> push!(extra_states, state),
+             shouldstop=stop_after_3_more,
+             hasconverged=converged_1e12)
+    @test length(extra_states) == 3
+    @test extra_states[1].numiter == 6
+    @test extra_states[end].numiter == 8
+end
+
 @testset "Aqua" verbose = true begin
     using Aqua
     Aqua.test_all(OptimKit)

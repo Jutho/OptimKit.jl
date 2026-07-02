@@ -129,6 +129,7 @@ const lbfgs = LBFGS()
 
 export optimize, gd, cg, lbfgs, optimtest
 export GradientDescent, ConjugateGradient, LBFGS
+export LBFGSState
 export FletcherReeves, HestenesStiefel, PolakRibiere, HagerZhang, DaiYuan
 export HagerZhangLineSearch
 
