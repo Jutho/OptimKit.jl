@@ -30,7 +30,7 @@ Both `verbosity` and `ls_verbosity` use the following scheme:
 - 3: progress information after each iteration
 - 4: more detailed information (only for the linesearch)
 """
-struct LBFGS{T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
+struct LBFGS{T <: Real, L <: AbstractLineSearch} <: OptimizationAlgorithm
     m::Int
     maxiter::Int
     gradtol::T
@@ -38,29 +38,34 @@ struct LBFGS{T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
     verbosity::Int
     linesearch::L
 end
-function LBFGS(m::Int=8;
-               acceptfirst::Bool=true,
-               maxiter::Int=MAXITER[],
-               gradtol::Real=GRADTOL[],
-               verbosity::Int=VERBOSITY[],
-               ls_maxiter::Int=LS_MAXITER[],
-               ls_maxfg::Int=LS_MAXFG[],
-               ls_verbosity::Int=LS_VERBOSITY[],
-               linesearch::AbstractLineSearch=HagerZhangLineSearch(;
-                                                                   maxiter=ls_maxiter,
-                                                                   maxfg=ls_maxfg,
-                                                                   verbosity=ls_verbosity))
+function LBFGS(
+        m::Int = 8;
+        acceptfirst::Bool = true,
+        maxiter::Int = MAXITER[],
+        gradtol::Real = GRADTOL[],
+        verbosity::Int = VERBOSITY[],
+        ls_maxiter::Int = LS_MAXITER[],
+        ls_maxfg::Int = LS_MAXFG[],
+        ls_verbosity::Int = LS_VERBOSITY[],
+        linesearch::AbstractLineSearch = HagerZhangLineSearch(;
+            maxiter = ls_maxiter,
+            maxfg = ls_maxfg,
+            verbosity = ls_verbosity
+        )
+    )
     return LBFGS(m, maxiter, gradtol, acceptfirst, verbosity, linesearch)
 end
 
-function optimize(fg, x, alg::LBFGS;
-                  precondition=_precondition,
-                  (finalize!)=_finalize!,
-                  shouldstop=DefaultShouldStop(alg.maxiter),
-                  hasconverged=DefaultHasConverged(alg.gradtol),
-                  retract=_retract, inner=_inner, (transport!)=_transport!,
-                  (scale!)=_scale!, (add!)=_add!,
-                  isometrictransport=(transport! == _transport! && inner == _inner))
+function optimize(
+        fg, x, alg::LBFGS;
+        precondition = _precondition,
+        (finalize!) = _finalize!,
+        shouldstop = DefaultShouldStop(alg.maxiter),
+        hasconverged = DefaultHasConverged(alg.gradtol),
+        retract = _retract, inner = _inner, (transport!) = _transport!,
+        (scale!) = _scale!, (add!) = _add!,
+        isometrictransport = (transport! == _transport! && inner == _inner)
+    )
     t₀ = time()
     verbosity = alg.verbosity
     f, g = fg(x)
@@ -105,11 +110,13 @@ function optimize(fg, x, alg::LBFGS;
         _xlast[] = x # store result in global variables to debug linesearch failures
         _glast[] = g
         _dlast[] = η
-        x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
-                                            initialguess=one(f),
-                                            acceptfirst=alg.acceptfirst,
-                                            # for some reason, line search seems to converge to solution alpha = 2 in most cases if acceptfirst = false. If acceptfirst = true, the initial value of alpha can immediately be accepted. This typically leads to a more erratic convergence of normgrad, but to less function evaluations in the end.
-                                            retract=retract, inner=inner)
+        x, f, g, ξ, α, nfg = alg.linesearch(
+            fg, x, η, (f, g);
+            initialguess = one(f),
+            acceptfirst = alg.acceptfirst,
+            # for some reason, line search seems to converge to solution alpha = 2 in most cases if acceptfirst = false. If acceptfirst = true, the initial value of alpha can immediately be accepted. This typically leads to a more erratic convergence of normgrad, but to less function evaluations in the end.
+            retract = retract, inner = inner
+        )
         numfg += nfg
         numiter += 1
         x, f, g = finalize!(x, f, g, numiter)
@@ -127,8 +134,10 @@ function optimize(fg, x, alg::LBFGS;
             break
         end
         verbosity >= 3 &&
-            @info @sprintf("LBFGS: iter %4d, Δt %s: f = %.12e, ‖∇f‖ = %.4e, α = %.2e, m = %d, nfg = %d",
-                           numiter, format_time(Δt), f, normgrad, α, length(H), nfg)
+            @info @sprintf(
+            "LBFGS: iter %4d, Δt %s: f = %.12e, ‖∇f‖ = %.4e, α = %.2e, m = %d, nfg = %d",
+            numiter, format_time(Δt), f, normgrad, α, length(H), nfg
+        )
 
         # transport gprev, ηprev and vectors in Hessian approximation to x
         gprev = transport!(gprev, xprev, ηprev, α, x)
@@ -192,18 +201,22 @@ function optimize(fg, x, alg::LBFGS;
     end
     if _hasconverged
         verbosity >= 2 &&
-            @info @sprintf("LBFGS: converged after %d iterations and time %s: f = %.12e, ‖∇f‖ = %.4e",
-                           numiter, format_time(t), f, normgrad)
+            @info @sprintf(
+            "LBFGS: converged after %d iterations and time %s: f = %.12e, ‖∇f‖ = %.4e",
+            numiter, format_time(t), f, normgrad
+        )
     else
         verbosity >= 1 &&
-            @warn @sprintf("LBFGS: not converged to requested tol after %d iterations and time %s: f = %.12e, ‖∇f‖ = %.4e",
-                           numiter, format_time(t), f, normgrad)
+            @warn @sprintf(
+            "LBFGS: not converged to requested tol after %d iterations and time %s: f = %.12e, ‖∇f‖ = %.4e",
+            numiter, format_time(t), f, normgrad
+        )
     end
     history = [fhistory normgradhistory]
     return x, f, g, numfg, history
 end
 
-mutable struct LBFGSInverseHessian{TangentType,ScalarType}
+mutable struct LBFGSInverseHessian{TangentType, ScalarType}
     maxlength::Int
     length::Int
     first::Int
@@ -211,20 +224,24 @@ mutable struct LBFGSInverseHessian{TangentType,ScalarType}
     Y::Vector{TangentType}
     ρ::Vector{ScalarType}
     α::Vector{ScalarType} # work space
-    function LBFGSInverseHessian{T1,T2}(maxlength::Int, S::Vector{T1}, Y::Vector{T1},
-                                        ρ::Vector{T2}) where {T1,T2}
+    function LBFGSInverseHessian{T1, T2}(
+            maxlength::Int, S::Vector{T1}, Y::Vector{T1},
+            ρ::Vector{T2}
+        ) where {T1, T2}
         @assert length(S) == length(Y) == length(ρ)
         l = length(S)
         S = resize!(copy(S), maxlength)
         Y = resize!(copy(Y), maxlength)
         ρ = resize!(copy(ρ), maxlength)
         α = similar(ρ)
-        return new{T1,T2}(maxlength, l, 1, S, Y, ρ, α)
+        return new{T1, T2}(maxlength, l, 1, S, Y, ρ, α)
     end
 end
-function LBFGSInverseHessian(maxlength::Int, S::Vector{T1}, Y::Vector{T1},
-                             ρ::Vector{T2}) where {T1,T2}
-    return LBFGSInverseHessian{T1,T2}(maxlength, S, Y, ρ)
+function LBFGSInverseHessian(
+        maxlength::Int, S::Vector{T1}, Y::Vector{T1},
+        ρ::Vector{T2}
+    ) where {T1, T2}
+    return LBFGSInverseHessian{T1, T2}(maxlength, S, Y, ρ)
 end
 
 Base.length(H::LBFGSInverseHessian) = H.length
@@ -276,7 +293,7 @@ end
     return H
 end
 
-function (H::LBFGSInverseHessian)(g, precondition, inner, add!, scale!; α=H.α)
+function (H::LBFGSInverseHessian)(g, precondition, inner, add!, scale!; α = H.α)
     q = deepcopy(g)
     for k in length(H):-1:1
         s, y, ρ = H[k]
