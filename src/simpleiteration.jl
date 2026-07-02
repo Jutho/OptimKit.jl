@@ -24,9 +24,10 @@ struct SimpleIteration{T <: Real} <: FixedPointAlgorithm
     verbosity::Int
 end
 function SimpleIteration(;
-               maxiter::Int=MAXITER[],
-               gradtol::Real=GRADTOL[],
-               verbosity::Int=VERBOSITY[])
+        maxiter::Int = MAXITER[],
+        gradtol::Real = GRADTOL[],
+        verbosity::Int = VERBOSITY[]
+    )
     return SimpleIteration(maxiter, gradtol, verbosity)
 end
 

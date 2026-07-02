@@ -41,7 +41,7 @@ The `flavor` parameter can take the values
 - `PolakRibiere(; pos = true)`: Polak-Ribiere formula for β
 - `DaiYuan()`: Dai-Yuan formula for β
 """
-struct ConjugateGradient{F<:CGFlavor,T<:Real,L<:AbstractLineSearch} <: OptimizationAlgorithm
+struct ConjugateGradient{F <: CGFlavor, T <: Real, L <: AbstractLineSearch} <: OptimizationAlgorithm
     flavor::F
     restart::Int
     maxiter::Int
@@ -50,29 +50,33 @@ struct ConjugateGradient{F<:CGFlavor,T<:Real,L<:AbstractLineSearch} <: Optimizat
     linesearch::L
 end
 function ConjugateGradient(;
-                           flavor::CGFlavor=HagerZhang(),
-                           restart::Int=typemax(Int),
-                           maxiter::Int=MAXITER[],
-                           gradtol::Real=GRADTOL[],
-                           verbosity::Int=VERBOSITY[],
-                           ls_maxiter::Int=LS_MAXITER[],
-                           ls_maxfg::Int=LS_MAXFG[],
-                           ls_verbosity::Int=LS_VERBOSITY[],
-                           linesearch::AbstractLineSearch=HagerZhangLineSearch(;
-                                                                               maxiter=ls_maxiter,
-                                                                               maxfg=ls_maxfg,
-                                                                               verbosity=ls_verbosity))
+        flavor::CGFlavor = HagerZhang(),
+        restart::Int = typemax(Int),
+        maxiter::Int = MAXITER[],
+        gradtol::Real = GRADTOL[],
+        verbosity::Int = VERBOSITY[],
+        ls_maxiter::Int = LS_MAXITER[],
+        ls_maxfg::Int = LS_MAXFG[],
+        ls_verbosity::Int = LS_VERBOSITY[],
+        linesearch::AbstractLineSearch = HagerZhangLineSearch(;
+            maxiter = ls_maxiter,
+            maxfg = ls_maxfg,
+            verbosity = ls_verbosity
+        )
+    )
     return ConjugateGradient(flavor, restart, maxiter, gradtol, verbosity, linesearch)
 end
 
-function optimize(fg, x, alg::ConjugateGradient;
-                  precondition=_precondition,
-                  (finalize!)=_finalize!,
-                  shouldstop=DefaultShouldStop(alg.maxiter),
-                  hasconverged=DefaultHasConverged(alg.gradtol),
-                  retract=_retract, inner=_inner, (transport!)=_transport!,
-                  (scale!)=_scale!, (add!)=_add!,
-                  isometrictransport=(transport! == _transport! && inner == _inner))
+function optimize(
+        fg, x, alg::ConjugateGradient;
+        precondition = _precondition,
+        (finalize!) = _finalize!,
+        shouldstop = DefaultShouldStop(alg.maxiter),
+        hasconverged = DefaultHasConverged(alg.gradtol),
+        retract = _retract, inner = _inner, (transport!) = _transport!,
+        (scale!) = _scale!, (add!) = _add!,
+        isometrictransport = (transport! == _transport! && inner == _inner)
+    )
     t₀ = time()
     verbosity = alg.verbosity
     f, g = fg(x)
@@ -112,11 +116,15 @@ function optimize(fg, x, alg::ConjugateGradient;
         if mod(numiter, alg.restart) == 0
             β = zero(α)
         else
-            β = oftype(α,
-                       let x = x
-                           alg.flavor(g, gprev, Pg, Pgprev, ηprev,
-                                      (η₁, η₂) -> inner(x, η₁, η₂))
-                       end)
+            β = oftype(
+                α,
+                let x = x
+                    alg.flavor(
+                        g, gprev, Pg, Pgprev, ηprev,
+                        (η₁, η₂) -> inner(x, η₁, η₂)
+                    )
+                end
+            )
             η = add!(η, ηprev, β)
         end
 
@@ -130,9 +138,11 @@ function optimize(fg, x, alg::ConjugateGradient;
         _xlast[] = x # store result in global variables to debug linesearch failures
         _glast[] = g
         _dlast[] = η
-        x, f, g, ξ, α, nfg = alg.linesearch(fg, x, η, (f, g);
-                                            initialguess=α,
-                                            retract=retract, inner=inner)
+        x, f, g, ξ, α, nfg = alg.linesearch(
+            fg, x, η, (f, g);
+            initialguess = α,
+            retract = retract, inner = inner
+        )
         numfg += nfg
         numiter += 1
         x, f, g = finalize!(x, f, g, numiter)
@@ -150,8 +160,10 @@ function optimize(fg, x, alg::ConjugateGradient;
             break
         end
         verbosity >= 3 &&
-            @info @sprintf("CG: iter %4d, Δt %s: f = %.12e, ‖∇f‖ = %.4e, α = %.2e, β = %.2e, nfg = %d",
-                           numiter, format_time(Δt), f, normgrad, α, β, nfg)
+            @info @sprintf(
+            "CG: iter %4d, Δt %s: f = %.12e, ‖∇f‖ = %.4e, α = %.2e, β = %.2e, nfg = %d",
+            numiter, format_time(Δt), f, normgrad, α, β, nfg
+        )
 
         # transport gprev, ηprev and vectors in Hessian approximation to x
         gprev = transport!(gprev, xprev, ηprev, α, x)
@@ -167,22 +179,26 @@ function optimize(fg, x, alg::ConjugateGradient;
     end
     if _hasconverged
         verbosity >= 2 &&
-            @info @sprintf("CG: converged after %d iterations and time %s: f = %.12e, ‖∇f‖ = %.4e",
-                           numiter, format_time(t), f, normgrad)
+            @info @sprintf(
+            "CG: converged after %d iterations and time %s: f = %.12e, ‖∇f‖ = %.4e",
+            numiter, format_time(t), f, normgrad
+        )
     else
         verbosity >= 1 &&
-            @warn @sprintf("CG: not converged to requested tol after %d iterations and time %s: f = %.12e, ‖∇f‖ = %.4e",
-                           numiter, format_time(t), f, normgrad)
+            @warn @sprintf(
+            "CG: not converged to requested tol after %d iterations and time %s: f = %.12e, ‖∇f‖ = %.4e",
+            numiter, format_time(t), f, normgrad
+        )
     end
     history = [fhistory normgradhistory]
     return x, f, g, numfg, history
 end
 
-struct HagerZhang{T<:Real} <: CGFlavor
+struct HagerZhang{T <: Real} <: CGFlavor
     η::T
     θ::T
 end
-HagerZhang(; η::Real=4 // 10, θ::Real=1 // 1) = HagerZhang(promote(η, θ)...)
+HagerZhang(; η::Real = 4 // 10, θ::Real = 1 // 1) = HagerZhang(promote(η, θ)...)
 
 function (HZ::HagerZhang)(g, gprev, Pg, Pgprev, dprev, inner)
     dd = inner(dprev, dprev)

@@ -8,6 +8,8 @@
 
 Anderson mixing, also known as Anderson acceleration, for fixed point problems.
 
+WARNING: Experimental implementation – subject to change.
+
 ## Parameters
 - `m::Int`: The number of previous iterates to use for Anderson extrapolation.
 - `damping::Real`: The damping parameter for Anderson extrapolation; a value of 1 corresponds to no damping, while a value between 0 and 1 corresponds to under-relaxation.
@@ -28,11 +30,13 @@ struct AndersonMixing{T <: Real} <: FixedPointAlgorithm
     gradtol::T
     verbosity::Int
 end
-function AndersonMixing(m::Int=8;
-               damping::Real = 1,
-               maxiter::Int=MAXITER[],
-               gradtol::Real=GRADTOL[],
-               verbosity::Int=VERBOSITY[])
+function AndersonMixing(
+        m::Int = 8;
+        damping::Real = 1,
+        maxiter::Int = MAXITER[],
+        gradtol::Real = GRADTOL[],
+        verbosity::Int = VERBOSITY[]
+    )
     damping′, gradtol′ = promote(damping, gradtol)
     return AndersonMixing(m, damping′, maxiter, gradtol′, verbosity)
 end
@@ -100,7 +104,7 @@ function fixedpoint(
         # Δx = transport!(deepcopy(Δx), xprev, Δx, 1, x) # transport previous Anderson extrapolation step to current point
 
         mold = length(H)
-        push!(H, (Δg, Δx)) 
+        push!(H, (Δg, Δx))
         for k in 1:(length(H) - 1)
             (Δgₖ, Δxₖ) = H[k]
             Δgₖ = transport!(Δgₖ, xprev, Δxprev, 1, x) # transport stored residuals to current point
@@ -141,7 +145,7 @@ function fixedpoint(
         # overlapX = [inner(x, H[i][2], H[j][2]) for i in 1:m, j in 1:m]
         # overlap += sqrt(eps(one(eltype(overlap)))) * overlapX
         overlap += LinearAlgebra.tr(overlap) / size(overlap, 1) * sqrt(eps(one(eltype(overlap)))) * I
-        Γ = overlap \ rhs # solve least squares problem to get Anderson coefficients
+        Γ = LinearAlgebra.cholesky(overlap) \ rhs # solve least squares problem to get Anderson coefficients
         ḡ = deepcopy(g)
         Δx = scale!(deepcopy(Δx), 0)
         @inbounds for k in 1:m
@@ -149,7 +153,6 @@ function fixedpoint(
             ḡ = add!(ḡ, Δgₖ, -Γ[k])
             Δx = add!(Δx, Δxₖ, -Γ[k]) # compute Anderson extrapolation direction
         end
-        @show sqrt(inner(x, ḡ, ḡ))
         Δx = add!(Δx, ḡ, alg.damping) # add damping to Anderson extrapolation direction
 
         # store current quantities as previous quantities
@@ -193,19 +196,19 @@ mutable struct AndersonHistory{TangentType}
     maxlength::Int
     length::Int
     first::Int
-    Δgesiduals::Vector{TangentType}
+    Δresiduals::Vector{TangentType}
     Δpositions::Vector{TangentType}
-    function AndersonHistory{T}(maxlength::Int, Δgesiduals::Vector{T}, Δpositions::Vector{T}) where {T}
-        l = length(Δgesiduals)
-        @assert l == length(Δpositions) "AndersonHistory: Δgesiduals and Δpositions must have the same length"
+    function AndersonHistory{T}(maxlength::Int, Δresiduals::Vector{T}, Δpositions::Vector{T}) where {T}
+        l = length(Δresiduals)
+        @assert l == length(Δpositions) "AndersonHistory: Δresiduals and Δpositions must have the same length"
         @assert l <= maxlength "AndersonHistory: initial history length cannot exceed maxlength"
-        Δgesiduals = resize!(copy(Δgesiduals), maxlength)
+        Δresiduals = resize!(copy(Δresiduals), maxlength)
         Δpositions = resize!(copy(Δpositions), maxlength)
-        return new{T}(maxlength, l, 1, Δgesiduals, Δpositions)
+        return new{T}(maxlength, l, 1, Δresiduals, Δpositions)
     end
 end
-function AndersonHistory(maxlength::Int, Δgesiduals::Vector{T}, Δpositions::Vector{T}) where {T}
-    return AndersonHistory{T}(maxlength, Δgesiduals, Δpositions)
+function AndersonHistory(maxlength::Int, Δresiduals::Vector{T}, Δpositions::Vector{T}) where {T}
+    return AndersonHistory{T}(maxlength, Δresiduals, Δpositions)
 end
 
 Base.length(H::AndersonHistory) = H.length
@@ -217,7 +220,7 @@ Base.length(H::AndersonHistory) = H.length
     n = H.maxlength
     idx = H.first + i - 1
     idx = ifelse(idx > n, idx - n, idx)
-    return (getindex(H.Δgesiduals, idx), getindex(H.Δpositions, idx))
+    return (getindex(H.Δresiduals, idx), getindex(H.Δpositions, idx))
 end
 
 @inline function Base.setindex!(H::AndersonHistory, (Δg, Δx), i)
@@ -225,7 +228,7 @@ end
         throw(BoundsError(H, i))
     end
     idx = mod1(H.first + i - 1, H.maxlength)
-    setindex!(H.Δgesiduals, Δg, idx)
+    setindex!(H.Δresiduals, Δg, idx)
     setindex!(H.Δpositions, Δx, idx)
     return (Δg, Δx)
 end
