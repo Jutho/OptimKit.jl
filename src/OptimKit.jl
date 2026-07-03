@@ -53,13 +53,16 @@ const _dlast = Ref{Any}()
 
 """
     optimize(fg, x, alg;
-                  precondition=_precondition,
-                  (finalize!)=_finalize!,
-                  hasconverged=DefaultHasConverged(alg.gradtol),
-                  shouldstop=DefaultShouldStop(alg.maxiter),
-                  retract=_retract, inner=_inner, (transport!)=_transport!,
-                  (scale!)=_scale!, (add!)=_add!,
-                  isometrictransport=(transport! == _transport! && inner == _inner))
+                  precondition = _precondition,
+                  (finalize!) = _finalize!,
+                  hasconverged = DefaultHasConverged(alg.gradtol),
+                  shouldstop = DefaultShouldStop(alg.maxiter),
+                  retract = _retract,
+                  inner=_inner,
+                  transport! = _transport!,
+                  scale! =_scale!,
+                  add! = _add!,
+                  isometrictransport = (transport! == _transport! && inner == _inner))
     -> x, f, g, numfg, history
 
 Optimize (minimize) the objective function returned as the first value of `fg`, where the
