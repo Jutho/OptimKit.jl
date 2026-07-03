@@ -10,7 +10,7 @@ the configuration space has the structure of a Riemannian manifold, through user
 ## Optimization API
 
 The main functionality of this package is to mimize a cost function `f` using gradient-based
-optimization techniques. The
+optimization techniques.
 
 ```julia
 x, fx, gx, numfg, history = optimize(fg, x0, algorithm; kwargs...)
@@ -118,7 +118,7 @@ These too should have a function as value with the following signature and behav
 Default values are given by `precondition(x, η) = deepcopy(η)`,
 `finalize!(x, f, g, numiter) = x, f, g`,
 `hasconverged(x, f, g, normg) = normg < algorithm.gradtol` and
-`shouldstop(x, f, g, numfg, numiter, t_elapsed) < algorithm.maxiter`, where the algorithm
+`shouldstop(x, f, g, numfg, numiter, t_elapsed) = numiter > algorithm.maxiter`, where the algorithm
 fields are explained in the next subsection.
 
 
@@ -188,7 +188,7 @@ x, g, numfp, history = fixedpoint(fp, x0, algorithm; kwargs...)
 ```
 
 where `fp(x)` returns the next iterate candidate, corresponding to the iteration process
-`xₙ₊₁ = fp(xₙ)`. Here, `x` can be of any possible type, but operations on `f` are controlled
+`xₙ₊₁ = fp(xₙ)`. Here, `x` can be of any possible type, but operations on `x` are controlled
 via the keyword arguments, discussed below. The third positional argument `algorithm` is
 discussed in the "Algorithms" subsection below.
 
@@ -212,7 +212,7 @@ of `optimize`, except for `invretract` which was not needed for `optimize`, and 
     `x₀` on the manifold in terms of a tangent vector at base point `x₀`.
 
     The default value of `invretract` assumes that points live in a Euclidean vector space
-    and corresponds to `invretract(x₀, x) = VectorInterface.add(x, x₀, -1)`.
+    and corresponds to `invretract(x₀, x) = VectorInterface.add!!(x, x₀, -1)`.
 
 ### Additional keyword arguments
 
