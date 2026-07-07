@@ -74,7 +74,7 @@ These default values enable the use of real- or complex-valued arrays, as well a
 structures involving tuples and arrays, as supported by VectorInterface.jl, under the
 assumption of a Euclidean vector space structure.
 
-To change the geometrical structure or enable the use of other data types, custum
+To change the geometrical structure or enable the use of other data types, custom
 implementations for these functions need to be provided through the keyword arguments, and
 correctness thereof should be ensured by the user. In particular, note that the gradient `g`
 of the objective function should satisfy ``d f(x(α)) / d α  = inner(x(α), ξ(α), g(x(α)))``.
