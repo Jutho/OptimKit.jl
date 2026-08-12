@@ -1,18 +1,5 @@
 # OptimKit.jl
 
-| **Documentation** | **Build Status** |
-|:-----------------:|:----------------:|
-| [![][docs-stable-img]][docs-stable-url] [![][docs-dev-img]][docs-dev-url] | [![CI][ci-img]][ci-url] |
-
-[docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
-[docs-stable-url]: https://jutho.github.io/OptimKit.jl/stable
-
-[docs-dev-img]: https://img.shields.io/badge/docs-dev-blue.svg
-[docs-dev-url]: https://jutho.github.io/OptimKit.jl/latest
-
-[ci-img]: https://github.com/Jutho/OptimKit.jl/actions/workflows/ci.yml/badge.svg
-[ci-url]: https://github.com/Jutho/OptimKit.jl/actions/workflows/ci.yml
-
 A blissfully ignorant Julia package for optimization and fixed-point iteration.
 
 OptimKit is designed to make as few assumptions as possible about your state type and
