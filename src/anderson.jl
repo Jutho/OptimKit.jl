@@ -8,7 +8,8 @@
 
 Anderson mixing, also known as Anderson acceleration, for fixed point problems.
 
-WARNING: Experimental implementation – subject to change.
+!!! warning
+    Experimental implementation – subject to change.
 
 ## Parameters
 - `m::Int`: The number of previous iterates to use for Anderson extrapolation.
