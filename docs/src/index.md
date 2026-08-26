@@ -59,11 +59,11 @@ the configuration space and its tangent space, with the following signature and 
      not need to be recomputed
 
 The default values for these keyword arguments assume the case of a real Euclidean vector
-space (and the absense of a preconditioner), and are specified using methods from
+space, and are specified using methods from
 [VectorInterface.jl](https://github.com/QuantumKitHub/VectorInterface.jl).
 
 ```julia
-retract(x, η, α) = (add(x, d, α), d)
+retract(x, η, α) = (VectorInterface.add(x, d, α), d)
 inner(x, ξ1, ξ2) = ξ1 === ξ2 ? LinearAlgebra.norm(ξ1)^2 : real(VectorInterface.inner(ξ1, ξ2))
 transport!(ξ, x, η, α, xnew) = ξ
 add!(η, ξ, β) = VectorInterface.add!!(η, ξ, β)
