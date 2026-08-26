@@ -99,8 +99,7 @@ The keyword arguments are:
 Check the README of this package for further details on creating an algorithm instance,
 as well as for the meaning of the remaining keyword arguments and their default values.
 
-!!! Warning
-    
+!!! warning
     The default values of `hasconverged` and `shouldstop` are provided to ensure continuity
     with the previous versions of this package. However, this behaviour might change in the
     future.
@@ -149,8 +148,7 @@ The keyword arguments are:
 Check the README of this package for further details on creating an algorithm instance,
 as well as for the meaning of the remaining keyword arguments and their default values.
 
-!!! Warning
-    
+!!! warning
     The default values of `hasconverged` and `shouldstop` are provided to ensure continuity
     with the previous versions of this package. However, this behaviour might change in the
     future.
