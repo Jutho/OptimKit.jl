@@ -95,10 +95,25 @@ function optimize(
                 H(g, ξ -> precondition(x, ξ), (ξ1, ξ2) -> inner(x, ξ1, ξ2), add!, scale!)
             end
             η = scale!(Hg, -1)
-        else
+            if !(inner(x, g, η) < 0)
+                verbosity >= 2 &&
+                    @info "LBFGS: not a descent direction, resetting the inverse Hessian approximation"
+                empty!(H)
+            end
+        end
+        if length(H) == 0
             Pg = precondition(x, deepcopy(g))
             normPg = sqrt(inner(x, Pg, Pg))
             η = scale!(Pg, -0.01 / normPg) # initial guess: scale invariant
+        end
+        dϕ = inner(x, g, η)
+        if !(dϕ < 0)
+            verbosity >= 1 &&
+                @warn @sprintf(
+                "LBFGS: preconditioned gradient is not a descent direction (dϕ = %.2e), stopping",
+                dϕ
+            )
+            break
         end
 
         # store current quantities as previous quantities
@@ -138,6 +153,17 @@ function optimize(
             "LBFGS: iter %4d, Δt %s: f = %.12e, ‖∇f‖ = %.4e, α = %.2e, m = %d, nfg = %d",
             numiter, format_time(Δt), f, normgrad, α, length(H), nfg
         )
+
+        if iszero(α)
+            if length(H) == 0
+                verbosity >= 1 &&
+                    @warn "LBFGS: linesearch made no progress along the preconditioned gradient, stopping"
+                break
+            end
+            # the same direction would be proposed again
+            empty!(H)
+            continue
+        end
 
         # transport gprev, ηprev and vectors in Hessian approximation to x
         gprev = transport!(gprev, xprev, ηprev, α, x)

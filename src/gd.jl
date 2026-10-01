@@ -86,6 +86,15 @@ function optimize(
         # compute new search direction
         Pg = precondition(x, deepcopy(g))
         η = scale!(Pg, -1) # we don't need g or Pg anymore, so we can overwrite it
+        dϕ = inner(x, g, η)
+        if !(dϕ < 0)
+            verbosity >= 1 &&
+                @warn @sprintf(
+                "GD: preconditioned gradient is not a descent direction (dϕ = %.2e), stopping",
+                dϕ
+            )
+            break
+        end
 
         # perform line search
         _xlast[] = x # store result in global variables to debug linesearch failures
@@ -117,6 +126,11 @@ function optimize(
             "GD: iter %4d, Δt %s: f = %.12e, ‖∇f‖ = %.4e, α = %.2e, nfg = %d",
             numiter, format_time(Δt), f, normgrad, α, nfg
         )
+
+        if iszero(α)
+            verbosity >= 1 && @warn "GD: linesearch made no progress, stopping"
+            break
+        end
 
         # increase α for next step
         α = 2 * α
