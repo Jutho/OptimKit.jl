@@ -126,8 +126,11 @@ function optimize(
                 end
             )
             # e.g. 0/0 after a zero step, where g == gprev
-            isfinite(β) || (β = zero(α))
-            η = add!(η, ηprev, β)
+            if isfinite(β)
+                η = add!(η, ηprev, β)
+            else
+                β = zero(α)
+            end
         end
         dϕ = inner(x, g, η)
         if !(dϕ < 0) && !iszero(β)
