@@ -95,7 +95,8 @@ function optimize(
                 H(g, ξ -> precondition(x, ξ), (ξ1, ξ2) -> inner(x, ξ1, ξ2), add!, scale!)
             end
             η = scale!(Hg, -1)
-            if !(inner(x, g, η) < 0)
+            # not equivalent to `inner(x, g, η) >= 0`: a NaN slope must also count as non-descent
+            if !isnegative(inner(x, g, η))
                 verbosity >= 2 &&
                     @info "LBFGS: not a descent direction, resetting the inverse Hessian approximation"
                 empty!(H)
@@ -107,7 +108,8 @@ function optimize(
             η = scale!(Pg, -0.01 / normPg) # initial guess: scale invariant
         end
         dϕ = inner(x, g, η)
-        if !(dϕ < 0)
+        # not equivalent to `dϕ >= 0`: a NaN slope must also count as non-descent
+        if !isnegative(dϕ)
             verbosity >= 1 &&
                 @warn @sprintf(
                 "LBFGS: preconditioned gradient is not a descent direction (dϕ = %.2e), stopping",

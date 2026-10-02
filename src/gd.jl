@@ -87,7 +87,8 @@ function optimize(
         Pg = precondition(x, deepcopy(g))
         η = scale!(Pg, -1) # we don't need g or Pg anymore, so we can overwrite it
         dϕ = inner(x, g, η)
-        if !(dϕ < 0)
+        # not equivalent to `dϕ >= 0`: a NaN slope must also count as non-descent
+        if !isnegative(dϕ)
             verbosity >= 1 &&
                 @warn @sprintf(
                 "GD: preconditioned gradient is not a descent direction (dϕ = %.2e), stopping",

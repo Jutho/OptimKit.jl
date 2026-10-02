@@ -15,6 +15,14 @@ const GRADTOL = ScopedValue(1.0e-8)
 const MAXITER = ScopedValue(1_000_000)
 const VERBOSITY = ScopedValue(1)
 
+# `!isnegative(x)` is not equivalent to `x >= 0`: it is also `true` for NaN
+@static if !isdefined(Base, :isnegative) # added to Base in Julia 1.13
+    isnegative(x::Real) = x < 0
+end
+@static if !isdefined(Base, :ispositive) # added to Base in Julia 1.13
+    ispositive(x::Real) = x > 0
+end
+
 # Default values for the manifold structure
 _retract(x, d, α) = (add(x, d, α), d)
 _invretract(x, y) = add(y, x, -1)

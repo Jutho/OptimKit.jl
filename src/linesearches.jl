@@ -124,11 +124,12 @@ function (ls::HagerZhangLineSearch)(
     )
     (f₀, g₀) = fg₀
     ϕ₀ = f₀
-    if !(isfinite(initialguess) && initialguess > 0)
+    if !(isfinite(initialguess) && ispositive(initialguess))
         throw(ArgumentError("initial guess for the step length should be positive and finite, got $initialguess"))
     end
     dϕ₀ = inner(x₀, g₀, η₀)
-    if !(dϕ₀ < zero(dϕ₀))
+    # not equivalent to `dϕ₀ >= 0`: a NaN slope must also count as non-descent
+    if !isnegative(dϕ₀)
         @warn "Linesearch was not given a descent direction: returning zero step length"
         return x₀, f₀, g₀, η₀, zero(one(f₀)), 0
     end

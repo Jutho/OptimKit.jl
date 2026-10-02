@@ -133,14 +133,16 @@ function optimize(
             end
         end
         dϕ = inner(x, g, η)
-        if !(dϕ < 0) && !iszero(β)
+        # not equivalent to `dϕ >= 0`: a NaN slope must also count as non-descent
+        if !isnegative(dϕ) && !iszero(β)
             verbosity >= 2 &&
                 @info "CG: not a descent direction, restarting with the preconditioned gradient"
             β = zero(α)
             η = scale!(deepcopy(Pg), -1)
             dϕ = inner(x, g, η)
         end
-        if !(dϕ < 0)
+        # not equivalent to `dϕ >= 0`: a NaN slope must also count as non-descent
+        if !isnegative(dϕ)
             verbosity >= 1 &&
                 @warn @sprintf(
                 "CG: preconditioned gradient is not a descent direction (dϕ = %.2e), stopping",
