@@ -125,8 +125,33 @@ function optimize(
                     )
                 end
             )
-            η = add!(η, ηprev, β)
+            # e.g. 0/0 after a zero step, where g == gprev
+            if isfinite(β)
+                η = add!(η, ηprev, β)
+            else
+                β = zero(α)
+            end
         end
+        dϕ = inner(x, g, η)
+        # not equivalent to `dϕ >= 0`: a NaN slope must also count as non-descent
+        if !isnegative(dϕ) && !iszero(β)
+            verbosity >= 2 &&
+                @info "CG: not a descent direction, restarting with the preconditioned gradient"
+            β = zero(α)
+            η = scale!(deepcopy(Pg), -1)
+            dϕ = inner(x, g, η)
+        end
+        # not equivalent to `dϕ >= 0`: a NaN slope must also count as non-descent
+        if !isnegative(dϕ)
+            verbosity >= 1 &&
+                @warn @sprintf(
+                "CG: preconditioned gradient is not a descent direction (dϕ = %.2e), stopping",
+                dϕ
+            )
+            break
+        end
+        # after a zero step, doubling would leave the initial guess at zero
+        iszero(α) && (α = 1 / sqrt(-dϕ))
 
         # store current quantities as previous quantities
         xprev = x
@@ -173,6 +198,12 @@ function optimize(
             Pgprev = transport!(Pgprev, xprev, ηprev, α, x)
         end
         ηprev = transport!(deepcopy(ηprev), xprev, ηprev, α, x)
+
+        if iszero(α) && iszero(β)
+            verbosity >= 1 &&
+                @warn "CG: linesearch made no progress along the preconditioned gradient, stopping"
+            break
+        end
 
         # increase α for next step
         α = 2 * α

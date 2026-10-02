@@ -98,6 +98,46 @@ algorithms = (GradientDescent, ConjugateGradient, LBFGS)
     @test f < 1.0e-12
 end
 
+# an indefinite preconditioner eventually produces a non-descent direction
+@testset "Non-descent direction $algtype" for algtype in algorithms
+    fg = quadraticproblem(Matrix(1.0I, 2, 2), zeros(2))
+    precondition(x, g) = [g[1], -g[2] / 2]
+    alg = algtype(; verbosity = 1, gradtol = 1.0e-12, maxiter = 100)
+    x, f, g, numfg, history = @test_logs (:warn, r"not a descent direction") (:warn, r"not converged") optimize(
+        fg, [1.0, 0.1], alg; precondition
+    )
+    @test all(isfinite, x)
+    @test size(history, 1) - 1 < 100
+end
+
+struct ConstantFlavor <: OptimKit.CGFlavor
+    β::Float64
+end
+(flavor::ConstantFlavor)(args...) = flavor.β
+
+# a bad β should restart from the preconditioned gradient instead of breaking the optimization
+@testset "ConjugateGradient restarts for β = $β" for β in (NaN, -1.0e3)
+    n = 10
+    y = randn(n)
+    A = randn(n, n)
+    A = A' * A + I
+    fg = quadraticproblem(A, y)
+    alg = ConjugateGradient(; flavor = ConstantFlavor(β), verbosity = 0, gradtol = 1.0e-8, maxiter = 10_000)
+    x, f, g, numfg, history = optimize(fg, randn(n), alg)
+    @test all(isfinite, x)
+    @test x ≈ y rtol = cond(A) * 1.0e-8
+end
+
+@testset "Linesearch rejects invalid initial guess $α" for α in (0.0, -1.0, NaN, Inf)
+    fg = x -> (x^2, 2 * x)
+    @test_throws ArgumentError HagerZhangLineSearch()(fg, 1.0, -2.0; initialguess = α)
+end
+
+@testset "Linesearch with non-finite slope" begin
+    fg = x -> (x^2, 2 * x)
+    @test_logs (:warn, r"not given a descent direction") match_mode = :any HagerZhangLineSearch()(fg, 1.0, NaN)
+end
+
 include("sphere.jl")
 
 @testset "Manifold correctness" begin

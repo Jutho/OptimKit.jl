@@ -124,8 +124,12 @@ function (ls::HagerZhangLineSearch)(
     )
     (f₀, g₀) = fg₀
     ϕ₀ = f₀
+    if !(isfinite(initialguess) && ispositive(initialguess))
+        throw(ArgumentError("initial guess for the step length should be positive and finite, got $initialguess"))
+    end
     dϕ₀ = inner(x₀, g₀, η₀)
-    if dϕ₀ >= zero(dϕ₀)
+    # not equivalent to `dϕ₀ >= 0`: a NaN slope must also count as non-descent
+    if !isnegative(dϕ₀)
         @warn "Linesearch was not given a descent direction: returning zero step length"
         return x₀, f₀, g₀, η₀, zero(one(f₀)), 0
     end
@@ -425,6 +429,11 @@ function bracket(iter::HagerZhangLineSearchIterator{T}, c::LineSearchPoint) wher
                 c.α, c.dϕ, c.ϕ - p₀.ϕ
             )
         end
+        if !(isfinite(c.ϕ) && isfinite(c.dϕ))
+            verbosity >= 1 &&
+                @warn "  Linesearch bracket: no finite function value or slope within the allowed function evaluations"
+            return a, a, numfg
+        end
         c.dϕ >= 0 && return a, c, numfg # B1
         # from here: c.dϕ < 0
         if c.ϕ > fmax # B2
@@ -432,6 +441,11 @@ function bracket(iter::HagerZhangLineSearchIterator{T}, c::LineSearchPoint) wher
             return a, b, numfg + nfg
         else # B3
             a = c
+            if numfg >= iter.parameters.maxfg
+                verbosity >= 1 &&
+                    @warn "  Linesearch bracket: slope still negative after the allowed function evaluations"
+                return a, a, numfg
+            end
             α *= iter.parameters.ρ
             c = takestep(iter, α)
             numfg += 1
