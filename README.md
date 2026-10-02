@@ -8,7 +8,7 @@
 [docs-stable-url]: https://jutho.github.io/OptimKit.jl/stable
 
 [docs-dev-img]: https://img.shields.io/badge/docs-dev-blue.svg
-[docs-dev-url]: https://jutho.github.io/OptimKit.jl/latest
+[docs-dev-url]: https://jutho.github.io/OptimKit.jl/dev
 
 [ci-img]: https://github.com/Jutho/OptimKit.jl/actions/workflows/ci.yml/badge.svg
 [ci-url]: https://github.com/Jutho/OptimKit.jl/actions/workflows/ci.yml
